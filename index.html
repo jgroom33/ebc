@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ciena EBC — Conference Room</title>
+  <link rel="icon" href="data:," />
+  <style>
+    :root { color-scheme: dark; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; background: #0b0f14; }
+    #app { position: fixed; inset: 0; }
+    canvas { display: block; width: 100%; height: 100%; }
+
+    /* Title / branding overlay */
+    #hud {
+      position: fixed; top: 22px; left: 26px; z-index: 10;
+      font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+      color: #eaf1f8; pointer-events: none; user-select: none;
+      text-shadow: 0 1px 12px rgba(0,0,0,0.6);
+    }
+    #hud .logo { font-size: 30px; font-weight: 700; letter-spacing: 4px; color: #e4002b; }
+    #hud .sub  { font-size: 13px; font-weight: 400; letter-spacing: 2px; opacity: 0.85; margin-top: 2px; }
+    #hint {
+      position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 10;
+      font-family: "Segoe UI", system-ui, sans-serif; font-size: 12px; letter-spacing: 1px;
+      color: #cdd8e3; opacity: 0.7; pointer-events: none; user-select: none;
+    }
+
+    /* Loading screen */
+    #loader {
+      position: fixed; inset: 0; z-index: 20; display: flex;
+      align-items: center; justify-content: center; flex-direction: column;
+      background: #0b0f14; transition: opacity 0.6s ease; gap: 14px;
+      font-family: "Segoe UI", system-ui, sans-serif; color: #6f86a0;
+    }
+    #loader.hidden { opacity: 0; pointer-events: none; }
+    #loader .spin {
+      width: 34px; height: 34px; border-radius: 50%;
+      border: 3px solid rgba(47,143,230,0.25); border-top-color: #2f8fe6;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Error panel */
+    #error {
+      position: fixed; inset: 0; z-index: 30; display: none;
+      align-items: center; justify-content: center; padding: 40px;
+      background: #0b0f14; font-family: ui-monospace, "Cascadia Code", monospace;
+      color: #ff8e8e; font-size: 13px; white-space: pre-wrap; line-height: 1.6;
+    }
+  </style>
+
+  <!-- three.js + addons from CDN (no build step) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="hud">
+    <div class="logo">CIENA</div>
+    <div class="sub">EXECUTIVE BRIEFING CENTER</div>
+  </div>
+  <div id="hint">drag to orbit · scroll to zoom · right-drag to pan</div>
+
+  <div id="loader"><div class="spin"></div><div>Building conference room…</div></div>
+  <div id="error"></div>
+
+  <!-- Surface any module-load/runtime error to the on-screen panel. -->
+  <script>
+    (function () {
+      const errEl = document.getElementById('error');
+      function showError(msg) {
+        errEl.style.display = 'flex';
+        errEl.textContent = 'Failed to load the scene:\n\n' + msg;
+        const l = document.getElementById('loader');
+        if (l) l.classList.add('hidden');
+      }
+      window.addEventListener('error', (e) => showError(e.message || String(e.error)));
+      window.addEventListener('unhandledrejection', (e) => showError(String(e.reason)));
+    })();
+  </script>
+
+  <!-- ======================================================================
+       Ciena EBC — Glass-Walled Conference Room (inlined; single-file build)
+       A parametric three.js scene. Every element is its own THREE.Group,
+       driven by the CONFIG block below so the room can be re-proportioned in
+       one place. three.js loads from a CDN via the import map above.
+       ====================================================================== -->
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+    import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
+
+    // -----------------------------------------------------------------------
+    // Units & configuration  (internal units = metres; defaults given in feet)
+    // -----------------------------------------------------------------------
+    const FT = 0.3048;          // feet  -> metres
+    const IN = FT / 12;         // inches -> metres
+
+    const CONFIG = {
+      // Architectural shell -------------------------------------------------
+      roomLength:     48 * FT,  // X — the long (glass) wall's length
+      roomDepth:      16 * FT,  // Z — how deep the room is
+      ceilingHeight:   9 * FT,  // Y
+      hallWidth:       6 * FT,  // Z — hallway between the two glass walls
+      wallThickness:   6 * IN,
+      glassThickness:  1 * IN,
+      frameDepth:      2 * IN,  // mullion / frame profile
+      // Door opening in the near glass wall --------------------------------
+      doorWidth:       3.2 * FT,
+      doorHeight:      7 * FT,
+      // Furniture -----------------------------------------------------------
+      tableLength:    32 * FT,
+      tableWidth:      4 * FT,
+      tableHeight:     0.74,     // ~29 in
+      chairsPerSide:   9,
+      // Ceiling lights ------------------------------------------------------
+      lightCols:       8,        // along X
+      lightRows:       2,        // along Z
+      // Palette -------------------------------------------------------------
+      cienaRed: '#e4002b',       // logo wordmark colour
+      color: {
+        brandBlue:  0x0056b4,
+        wall:       0xe1ded7,
+        floorRoom:  0x3c3f46,    // carpet
+        floorHall:  0x9aa3ab,    // polished
+        ceiling:    0xededed,
+        frame:      0x2a2e33,    // dark anodised metal
+        glassTint:  0xcfe3ea,
+        tableTop:   0x2a1c12,    // dark wood
+        tableBase:  0x1e1e21,
+        chair:      0x2d3037,
+        screen:     0x0f0f12,
+        lens:       0xfff6e6,
+      },
+    };
+
+    // Convenience derived dimensions
+    const L = CONFIG.roomLength;
+    const D = CONFIG.roomDepth;
+    const H = CONFIG.ceilingHeight;
+    const W = CONFIG.hallWidth;
+
+    // -----------------------------------------------------------------------
+    // Renderer / scene / camera
+    // -----------------------------------------------------------------------
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.getElementById('app').appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x10151b);
+
+    // Image-based lighting — required for transmissive glass to read believably.
+    RectAreaLightUniformsLib.init();
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+    const camera = new THREE.PerspectiveCamera(
+      52, window.innerWidth / window.innerHeight, 0.05, 200
+    );
+    camera.position.set(L * 0.40, 1.75, D * 0.92);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.07;
+    controls.target.set(-L * 0.04, 1.35, -W * 0.4); // look across the room & through the glass
+    controls.minDistance = 1.5;
+    controls.maxDistance = 70;
+    controls.maxPolarAngle = Math.PI * 0.495;       // don't dip under the floor
+    controls.update();
+
+    // -----------------------------------------------------------------------
+    // Materials
+    // -----------------------------------------------------------------------
+    const C = CONFIG.color;
+    const mat = {
+      wall:      new THREE.MeshStandardMaterial({ color: C.wall, roughness: 0.92, metalness: 0.0 }),
+      floorRoom: new THREE.MeshStandardMaterial({ color: C.floorRoom, roughness: 0.95, metalness: 0.0 }),
+      floorHall: new THREE.MeshStandardMaterial({ color: C.floorHall, roughness: 0.25, metalness: 0.1 }),
+      ceiling:   new THREE.MeshStandardMaterial({ color: C.ceiling, roughness: 0.96, metalness: 0.0 }),
+      frame:     new THREE.MeshStandardMaterial({ color: C.frame, roughness: 0.4, metalness: 0.85 }),
+      tableTop:  new THREE.MeshStandardMaterial({ color: C.tableTop, roughness: 0.45, metalness: 0.05 }),
+      tableBase: new THREE.MeshStandardMaterial({ color: C.tableBase, roughness: 0.5, metalness: 0.7 }),
+      chair:     new THREE.MeshStandardMaterial({ color: C.chair, roughness: 0.7, metalness: 0.2 }),
+      screen:    new THREE.MeshStandardMaterial({ color: C.screen, roughness: 0.25, metalness: 0.3,
+                                                  emissive: 0x0a1a2e, emissiveIntensity: 0.6 }),
+      brand:     new THREE.MeshStandardMaterial({ color: C.brandBlue, roughness: 0.5, metalness: 0.1,
+                                                  emissive: C.brandBlue, emissiveIntensity: 0.15 }),
+      lens:      new THREE.MeshStandardMaterial({ color: C.lens, emissive: C.lens, emissiveIntensity: 1.4,
+                                                  roughness: 0.6 }),
+      // Transmissive architectural glass.
+      glass: new THREE.MeshPhysicalMaterial({
+        color: C.glassTint, metalness: 0, roughness: 0.04,
+        transmission: 1.0, ior: 1.5, thickness: 0.6,
+        transparent: true, opacity: 1.0,
+        envMapIntensity: 1.2, clearcoat: 0.15, clearcoatRoughness: 0.1,
+      }),
+    };
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+    // A box centred at the origin of its own local space; caller positions it.
+    function box(w, h, d, material, { cast = true, receive = true } = {}) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+      m.castShadow = cast;
+      m.receiveShadow = receive;
+      return m;
+    }
+
+    // Place a mesh by the centre of its footprint.
+    function at(mesh, x, y, z) { mesh.position.set(x, y, z); return mesh; }
+
+    const root = new THREE.Group();
+    root.name = 'CienaEBC';
+    scene.add(root);
+
+    // -----------------------------------------------------------------------
+    // Architectural shell
+    // -----------------------------------------------------------------------
+    function buildFloors() {
+      const g = new THREE.Group(); g.name = 'Floors';
+      const t = 2 * IN;
+      // Room floor: Z in [0, D]
+      g.add(at(box(L + 0.4, t, D, mat.floorRoom, { cast: false }), 0, -t / 2, D / 2));
+      // Hallway floor: Z in [-W, 0]
+      g.add(at(box(L + 0.4, t, W, mat.floorHall, { cast: false }), 0, -t / 2, -W / 2));
+      root.add(g);
+      return g;
+    }
+
+    function buildCeilings() {
+      const g = new THREE.Group(); g.name = 'Ceilings';
+      const t = 4 * IN;
+      g.add(at(box(L + 0.4, t, D, mat.ceiling, { cast: false }), 0, H + t / 2, D / 2));
+      g.add(at(box(L + 0.4, t, W, mat.ceiling, { cast: false }), 0, H + t / 2, -W / 2));
+      root.add(g);
+      return g;
+    }
+
+    // (The opaque side & rear walls were intentionally removed so the room can be
+    //  panned/orbited from any angle without an enclosing wall blocking the view.
+    //  The display + branding now live on a freestanding media wall.)
+
+    // A horizontal frame rail spanning the full wall length.
+    function rail(y, z, height = CONFIG.frameDepth) {
+      return at(box(L, height, CONFIG.frameDepth, mat.frame), 0, y, z);
+    }
+    // A vertical mullion.
+    function mullion(x, z, h = H) {
+      return at(box(CONFIG.frameDepth, h, CONFIG.frameDepth, mat.frame), x, h / 2, z);
+    }
+
+    // Near glass wall (Z = 0) with a centred door opening; far wall (Z = -W) solid.
+    function buildGlassWall(z, { door = false, name = 'GlassWall' } = {}) {
+      const g = new THREE.Group(); g.name = name;
+      const gt = CONFIG.glassThickness;
+
+      // Top & bottom rails + the two end mullions.
+      g.add(rail(CONFIG.frameDepth / 2, z));                 // sill
+      g.add(rail(H - CONFIG.frameDepth / 2, z));             // head
+      g.add(mullion(-L / 2 + CONFIG.frameDepth / 2, z));
+      g.add(mullion( L / 2 - CONFIG.frameDepth / 2, z));
+
+      const glassH = H - CONFIG.frameDepth;                  // between sill & head
+      const glassY = CONFIG.frameDepth + glassH / 2;
+
+      if (!door) {
+        // Single continuous glazed wall, split by a few mullions for realism.
+        const bays = 4;
+        const bayW = L / bays;
+        for (let i = 0; i < bays; i++) {
+          const cx = -L / 2 + bayW * (i + 0.5);
+          g.add(at(box(bayW - CONFIG.frameDepth, glassH, gt, mat.glass, { cast: false }), cx, glassY, z));
+          if (i > 0) g.add(mullion(-L / 2 + bayW * i, z));
+        }
+      } else {
+        // Glazed wall with a door gap: left panel | door | right panel, + transom.
+        const dw = CONFIG.doorWidth;
+        const dh = CONFIG.doorHeight;
+        const sideW = (L - dw) / 2;                          // each side panel width
+
+        // Left & right fixed panels (full height between sill & head)
+        g.add(at(box(sideW - CONFIG.frameDepth, glassH, gt, mat.glass, { cast: false }),
+                 -L / 2 + sideW / 2, glassY, z));
+        g.add(at(box(sideW - CONFIG.frameDepth, glassH, gt, mat.glass, { cast: false }),
+                  L / 2 - sideW / 2, glassY, z));
+        // Mullions either side of the door
+        g.add(mullion(-dw / 2, z));
+        g.add(mullion( dw / 2, z));
+        // Transom (glass above the door)
+        const transH = (H - CONFIG.frameDepth) - dh;
+        if (transH > 0.02) {
+          g.add(at(box(dw, transH, gt, mat.glass, { cast: false }),
+                   0, dh + transH / 2 + CONFIG.frameDepth / 2, z));
+          g.add(at(box(dw, CONFIG.frameDepth, CONFIG.frameDepth, mat.frame),
+                   0, dh + CONFIG.frameDepth / 2, z));       // door head rail
+        }
+        // The door leaf — a single glass pane, slightly inset, with a pull handle.
+        const leaf = at(box(dw - 1.5 * IN, dh - 2 * IN, gt, mat.glass, { cast: false }),
+                        0, (dh) / 2 + CONFIG.frameDepth / 2, z);
+        g.add(leaf);
+        const handle = at(box(1.2 * IN, 12 * IN, 1.2 * IN, mat.frame),
+                          dw / 2 - 4 * IN, 1.05, z + gt);
+        g.add(handle);
+      }
+
+      root.add(g);
+      return g;
+    }
+
+    // -----------------------------------------------------------------------
+    // Furniture
+    // -----------------------------------------------------------------------
+    function buildTable() {
+      const g = new THREE.Group(); g.name = 'Table';
+      const cz = D / 2;
+      const topT = 2 * IN;
+      const topY = CONFIG.tableHeight - topT / 2;
+      // Top slab (slightly rounded look via a thin bevel box stack)
+      g.add(at(box(CONFIG.tableLength, topT, CONFIG.tableWidth, mat.tableTop), 0, topY, cz));
+      g.add(at(box(CONFIG.tableLength - 1 * IN, 0.6 * IN, CONFIG.tableWidth - 1 * IN, mat.tableTop),
+               0, topY - topT / 2 - 0.3 * IN, cz));
+      // Two panel bases (modern conference-table style)
+      const baseH = CONFIG.tableHeight - topT;
+      const baseInset = CONFIG.tableLength * 0.28;
+      for (const sx of [-baseInset, baseInset]) {
+        g.add(at(box(2 * IN, baseH, CONFIG.tableWidth * 0.55, mat.tableBase), sx, baseH / 2, cz));
+        g.add(at(box(10 * IN, 1 * IN, CONFIG.tableWidth * 0.62, mat.tableBase), sx, 0.5 * IN, cz)); // foot
+      }
+      // A subtle brand-blue cable channel down the centre of the top
+      g.add(at(box(CONFIG.tableLength * 0.5, 0.4 * IN, 3 * IN, mat.brand), 0, topY + topT / 2, cz));
+      root.add(g);
+      return g;
+    }
+
+    // A solid cylinder helper (used for clean chair bases — no thin flickering plates).
+    function cyl(rTop, rBottom, h, material) {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBottom, h, 24), material);
+      m.castShadow = true; m.receiveShadow = true;
+      return m;
+    }
+
+    // One chair as a reusable group; cloned for each seat.
+    function makeChair() {
+      const g = new THREE.Group(); g.name = 'Chair';
+      const seatH = 0.46, seatW = 0.5, seatD = 0.5;
+      // Thick seat cushion + backrest (solid forms, not thin plates).
+      g.add(at(box(seatW, 0.12, seatD, mat.chair), 0, seatH, 0));
+      g.add(at(box(seatW, 0.52, 0.08, mat.chair), 0, seatH + 0.30, -seatD / 2 + 0.04));
+      // Pedestal: gas column + disc base (cylinders — orbit-stable, no size flicker).
+      g.add(at(cyl(0.03, 0.03, seatH - 0.06, mat.tableBase), 0, (seatH - 0.06) / 2, 0));
+      g.add(at(cyl(0.27, 0.30, 0.05, mat.tableBase), 0, 0.025, 0));
+      return g;
+    }
+
+    function placeChairs() {
+      const g = new THREE.Group(); g.name = 'Chairs';
+      const proto = makeChair();
+      const cz = D / 2;
+      const n = CONFIG.chairsPerSide;
+      const span = CONFIG.tableLength * 0.92;
+      const gap = CONFIG.tableWidth / 2 + 0.32;             // distance from table centre to chair
+      for (let i = 0; i < n; i++) {
+        const x = -span / 2 + (span / (n - 1)) * i;
+        // Front side (toward glass, -Z): faces +Z toward table
+        const front = proto.clone();
+        front.position.set(x, 0, cz - gap);
+        front.rotation.y = 0;
+        g.add(front);
+        // Back side (toward back wall, +Z): faces -Z toward table
+        const back = proto.clone();
+        back.position.set(x, 0, cz + gap);
+        back.rotation.y = Math.PI;
+        g.add(back);
+      }
+      // Two head chairs
+      for (const sx of [-1, 1]) {
+        const c = proto.clone();
+        c.position.set(sx * (CONFIG.tableLength / 2 + 0.34), 0, cz);
+        c.rotation.y = sx * Math.PI / 2;
+        g.add(c);
+      }
+      root.add(g);
+      return g;
+    }
+
+    // -----------------------------------------------------------------------
+    // Freestanding media wall — display + CIENA branding (a furniture feature,
+    // not architecture, so removing the rear wall leaves nothing floating).
+    // -----------------------------------------------------------------------
+    function makeLogoTexture() {
+      const cv = document.createElement('canvas');
+      cv.width = 1024; cv.height = 256;
+      const ctx = cv.getContext('2d');
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.fillStyle = CONFIG.cienaRed;
+      ctx.font = '700 170px "Segoe UI", Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('CIENA', cv.width / 2, cv.height / 2 + 6);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 8;
+      return tex;
+    }
+
+    function buildMediaWall() {
+      const g = new THREE.Group(); g.name = 'MediaWall';
+      // A freestanding feature panel standing on the floor at the room's back edge,
+      // centred on the long axis. It faces the room (-Z).
+      const panelW = 12 * FT, panelH = 7.6 * FT, panelT = 5 * IN;
+      const cz = D - panelT / 2 - 2 * IN;                    // just inside the room
+      const front = cz - panelT / 2;                         // room-facing face
+      const panelMat = new THREE.MeshStandardMaterial({ color: 0x1b2026, roughness: 0.55, metalness: 0.25 });
+      g.add(at(box(panelW, panelH, panelT, panelMat), 0, panelH / 2, cz));
+
+      // Display: bezel + emissive panel on the front face.
+      const scW = 8 * FT, scH = 4.6 * FT, scY = panelH * 0.46;
+      g.add(at(box(scW + 4 * IN, scH + 4 * IN, 1 * IN, mat.frame), 0, scY, front - 0.6 * IN));
+      g.add(at(box(scW, scH, 0.8 * IN, mat.screen), 0, scY, front - 1.0 * IN));
+
+      // CIENA logo, centred above the display.
+      const logoMat = new THREE.MeshBasicMaterial({ map: makeLogoTexture(), transparent: true });
+      const logoW = 5.5 * FT;
+      const logo = new THREE.Mesh(new THREE.PlaneGeometry(logoW, logoW / 4), logoMat);
+      logo.position.set(0, scY + scH / 2 + 0.85 * FT, front - 0.8 * IN);
+      logo.rotation.y = Math.PI;                             // face into the room (-Z)
+      g.add(logo);
+
+      // Brand-blue accent bar near the base of the panel.
+      g.add(at(box(panelW, 4 * IN, 0.5 * IN, mat.brand), 0, 0.55 * FT, front - 0.5 * IN));
+      root.add(g);
+      return g;
+    }
+
+    // -----------------------------------------------------------------------
+    // Ceiling lights (emissive panels + soft area light)
+    // -----------------------------------------------------------------------
+    function buildCeilingLights() {
+      const g = new THREE.Group(); g.name = 'CeilingLights';
+      const cols = CONFIG.lightCols, rows = CONFIG.lightRows;
+      const panelW = 2 * FT, panelD = 2 * FT;
+      const y = H - 1 * IN;
+      const marginX = L * 0.12, marginZ = D * 0.18;
+      for (let c = 0; c < cols; c++) {
+        for (let r = 0; r < rows; r++) {
+          const x = -L / 2 + marginX + (L - 2 * marginX) * (cols === 1 ? 0.5 : c / (cols - 1));
+          const z = marginZ + (D - 2 * marginZ) * (rows === 1 ? 0.5 : r / (rows - 1));
+          g.add(at(box(panelW, 1 * IN, panelD, mat.lens, { cast: false }), x, y, z));
+          // A modest RectAreaLight beneath each panel (no shadows, soft fill).
+          const ral = new THREE.RectAreaLight(0xfff4e0, 5.5, panelW, panelD);
+          ral.position.set(x, y - 1.5 * IN, z);
+          ral.rotation.x = -Math.PI / 2;                      // face down
+          g.add(ral);
+        }
+      }
+      // Hallway lights (a row of small ones)
+      for (let c = 0; c < cols; c++) {
+        const x = -L / 2 + marginX + (L - 2 * marginX) * (cols === 1 ? 0.5 : c / (cols - 1));
+        g.add(at(box(panelW, 1 * IN, 1 * FT, mat.lens, { cast: false }), x, y, -W / 2));
+      }
+      root.add(g);
+      return g;
+    }
+
+    // -----------------------------------------------------------------------
+    // Scene lighting (key sun + fill)
+    // -----------------------------------------------------------------------
+    function buildLighting() {
+      const hemi = new THREE.HemisphereLight(0xdfe9f5, 0x2a2f36, 0.9);
+      scene.add(hemi);
+
+      const sun = new THREE.DirectionalLight(0xfff3e0, 2.4);
+      // Sun comes from beyond the far glass wall, raking through into the room.
+      sun.position.set(L * 0.3, H * 2.2, -W - 8 * FT);
+      sun.target.position.set(0, 0, D * 0.5);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(2048, 2048);
+      sun.shadow.camera.near = 1;
+      sun.shadow.camera.far = 40;
+      const s = Math.max(L, D) * 0.8;
+      Object.assign(sun.shadow.camera, { left: -s, right: s, top: s, bottom: -s });
+      sun.shadow.bias = -0.0004;
+      scene.add(sun);
+      scene.add(sun.target);
+
+      // Gentle fill from the room side so interior faces aren't muddy.
+      const fill = new THREE.DirectionalLight(0xbfd4ff, 0.4);
+      fill.position.set(-L * 0.4, H, D * 1.5);
+      scene.add(fill);
+    }
+
+    // -----------------------------------------------------------------------
+    // Build everything
+    // -----------------------------------------------------------------------
+    buildFloors();
+    buildCeilings();
+    buildGlassWall(0,  { door: true,  name: 'NearGlassWall' });
+    buildGlassWall(-W, { door: false, name: 'FarGlassWall' });
+    buildTable();
+    placeChairs();
+    buildMediaWall();
+    buildCeilingLights();
+    buildLighting();
+
+    // -----------------------------------------------------------------------
+    // Resize + render loop
+    // -----------------------------------------------------------------------
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    let started = false;
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+      if (!started) {
+        started = true;
+        const loader = document.getElementById('loader');
+        if (loader) loader.classList.add('hidden');
+      }
+    }
+    animate();
+
+    // Expose for debugging / tweaking from the console.
+    window.EBC = { scene, camera, renderer, controls, CONFIG, mat, root, THREE };
+  </script>
+</body>
+</html>
