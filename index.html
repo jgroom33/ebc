@@ -49,6 +49,92 @@
       background: #0b0f14; font-family: ui-monospace, "Cascadia Code", monospace;
       color: #ff8e8e; font-size: 13px; white-space: pre-wrap; line-height: 1.6;
     }
+
+    /* iPad control overlay — appears when the on-table tablet is tapped. */
+    #ipad-overlay {
+      position: fixed; inset: 0; z-index: 40; display: none;
+      align-items: center; justify-content: center;
+      background: rgba(6, 9, 13, 0.55); backdrop-filter: blur(7px);
+      -webkit-backdrop-filter: blur(7px);
+      font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+    }
+    #ipad-overlay.open { display: flex; }
+    /* The tablet "device" — a rounded slab with a thick bezel around the screen. */
+    #ipad-overlay .device {
+      width: min(86vw, 940px); max-height: 92vh;
+      background: linear-gradient(160deg, #1c1f24, #0e1014);
+      border-radius: 38px; padding: 20px;
+      box-shadow: 0 30px 90px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(255,255,255,0.04);
+      transform: scale(0.86); opacity: 0;
+      transition: transform 0.32s cubic-bezier(.2,.9,.3,1.2), opacity 0.28s ease;
+    }
+    #ipad-overlay.open .device { transform: scale(1); opacity: 1; }
+    /* The glass screen inside the bezel. */
+    #ipad-overlay .screen {
+      background: radial-gradient(120% 140% at 50% 0%, #142031 0%, #0b1118 60%, #080c11 100%);
+      border-radius: 22px; padding: 30px 34px 34px;
+      box-shadow: inset 0 0 0 1px rgba(120,170,230,0.10), inset 0 18px 60px rgba(0,0,0,0.5);
+      position: relative; overflow: hidden;
+    }
+    #ipad-overlay .screen::before {  /* faint screen sheen */
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(125deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 32%);
+    }
+    #ipad-overlay .head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 22px;
+    }
+    #ipad-overlay .titles .logo {
+      font-size: 24px; font-weight: 700; letter-spacing: 4px; color: #e4002b;
+    }
+    #ipad-overlay .titles .sub {
+      font-size: 12px; letter-spacing: 2px; color: #9fb3c6; margin-top: 2px;
+    }
+    #ipad-overlay .close {
+      width: 38px; height: 38px; border-radius: 50%; flex: 0 0 auto;
+      border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.04);
+      color: #cdd8e3; font-size: 20px; line-height: 1; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+    #ipad-overlay .close:hover { background: rgba(255,255,255,0.10); transform: scale(1.05); }
+    /* 2×2 hero menu. */
+    #ipad-overlay .grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    }
+    #ipad-overlay .tile {
+      position: relative; text-align: left; cursor: pointer;
+      border-radius: 18px; padding: 22px 22px 20px;
+      background: linear-gradient(160deg, rgba(38,52,72,0.55), rgba(20,28,40,0.55));
+      border: 1px solid rgba(120,170,230,0.14); color: #eaf1f8;
+      transition: transform 0.14s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+      min-height: 124px; display: flex; flex-direction: column; justify-content: space-between;
+    }
+    #ipad-overlay .tile:hover {
+      transform: translateY(-2px);
+      border-color: rgba(120,170,230,0.4);
+      box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+    }
+    #ipad-overlay .tile:active { transform: translateY(0); }
+    #ipad-overlay .tile .icon { font-size: 26px; line-height: 1; }
+    #ipad-overlay .tile .label { font-size: 18px; font-weight: 600; }
+    #ipad-overlay .tile .desc { font-size: 12px; color: #9fb3c6; margin-top: 4px; }
+    /* Active state pill (top-right of a tile). */
+    #ipad-overlay .tile .state {
+      position: absolute; top: 14px; right: 14px;
+      font-size: 10px; letter-spacing: 1.5px; font-weight: 700;
+      padding: 4px 9px; border-radius: 20px; text-transform: uppercase;
+      color: #9fb3c6; background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    #ipad-overlay .tile.active {
+      border-color: rgba(228,0,43,0.55);
+      background: linear-gradient(160deg, rgba(96,30,42,0.55), rgba(40,18,24,0.6));
+      box-shadow: 0 0 0 1px rgba(228,0,43,0.3), 0 12px 30px rgba(0,0,0,0.4);
+    }
+    #ipad-overlay .tile.active .state {
+      color: #fff; background: #e4002b; border-color: #e4002b;
+    }
   </style>
 
   <!-- three.js + addons from CDN (no build step) -->
@@ -72,6 +158,55 @@
 
   <div id="loader"><div class="spin"></div><div>Building conference room…</div></div>
   <div id="error"></div>
+
+  <!-- iPad control surface — shown when the on-table tablet is clicked. -->
+  <div id="ipad-overlay" aria-hidden="true">
+    <div class="device" role="dialog" aria-label="Conference room control">
+      <div class="screen">
+        <div class="head">
+          <div class="titles">
+            <div class="logo">CIENA</div>
+            <div class="sub">CONFERENCE ROOM CONTROL</div>
+          </div>
+          <button class="close" data-action="close" title="Close" aria-label="Close">×</button>
+        </div>
+        <div class="grid">
+          <button class="tile" data-action="conf-glass">
+            <span class="state">Clear</span>
+            <span class="icon">🪟</span>
+            <span>
+              <span class="label">Conference Room Glass</span>
+              <span class="desc">Frost the room's glass wall opaque</span>
+            </span>
+          </button>
+          <button class="tile" data-action="lab-glass">
+            <span class="state">Clear</span>
+            <span class="icon">🧪</span>
+            <span>
+              <span class="label">Lab Glass</span>
+              <span class="desc">Frost the lab glass across the hall</span>
+            </span>
+          </button>
+          <button class="tile" data-action="ciena-story">
+            <span class="state">Off</span>
+            <span class="icon">▶</span>
+            <span>
+              <span class="label">Ciena Story</span>
+              <span class="desc">Play the Ciena story on the monitor</span>
+            </span>
+          </button>
+          <button class="tile" data-action="optical-story">
+            <span class="state">Off</span>
+            <span class="icon">✦</span>
+            <span>
+              <span class="label">Optical Story</span>
+              <span class="desc">Play the optical story on the monitor</span>
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Surface any module-load/runtime error to the on-screen panel. -->
   <script>
@@ -272,6 +407,17 @@
       const g = new THREE.Group(); g.name = name;
       const gt = CONFIG.glassThickness;
 
+      // Each wall gets its OWN glass material clone so it can be frosted opaque
+      // independently of the other. Remember the clear-glass values for toggling back.
+      const glass = mat.glass.clone();
+      glass.userData.clear = {
+        color: glass.color.getHex(),
+        transmission: glass.transmission,
+        roughness: glass.roughness,
+        opacity: glass.opacity,
+      };
+      g.userData.glassMat = glass;
+
       // Top & bottom rails + the two end mullions.
       g.add(rail(CONFIG.frameDepth / 2, z));                 // sill
       g.add(rail(H - CONFIG.frameDepth / 2, z));             // head
@@ -287,7 +433,7 @@
         const bayW = L / bays;
         for (let i = 0; i < bays; i++) {
           const cx = -L / 2 + bayW * (i + 0.5);
-          g.add(at(box(bayW - CONFIG.frameDepth, glassH, gt, mat.glass, { cast: false }), cx, glassY, z));
+          g.add(at(box(bayW - CONFIG.frameDepth, glassH, gt, glass, { cast: false }), cx, glassY, z));
           if (i > 0) g.add(mullion(-L / 2 + bayW * i, z));
         }
       } else {
@@ -297,9 +443,9 @@
         const sideW = (L - dw) / 2;                          // each side panel width
 
         // Left & right fixed panels (full height between sill & head)
-        g.add(at(box(sideW - CONFIG.frameDepth, glassH, gt, mat.glass, { cast: false }),
+        g.add(at(box(sideW - CONFIG.frameDepth, glassH, gt, glass, { cast: false }),
                  -L / 2 + sideW / 2, glassY, z));
-        g.add(at(box(sideW - CONFIG.frameDepth, glassH, gt, mat.glass, { cast: false }),
+        g.add(at(box(sideW - CONFIG.frameDepth, glassH, gt, glass, { cast: false }),
                   L / 2 - sideW / 2, glassY, z));
         // Mullions either side of the door
         g.add(mullion(-dw / 2, z));
@@ -307,13 +453,13 @@
         // Transom (glass above the door)
         const transH = (H - CONFIG.frameDepth) - dh;
         if (transH > 0.02) {
-          g.add(at(box(dw, transH, gt, mat.glass, { cast: false }),
+          g.add(at(box(dw, transH, gt, glass, { cast: false }),
                    0, dh + transH / 2 + CONFIG.frameDepth / 2, z));
           g.add(at(box(dw, CONFIG.frameDepth, CONFIG.frameDepth, mat.frame),
                    0, dh + CONFIG.frameDepth / 2, z));       // door head rail
         }
         // The door leaf — a single glass pane, slightly inset, with a pull handle.
-        const leaf = at(box(dw - 1.5 * IN, dh - 2 * IN, gt, mat.glass, { cast: false }),
+        const leaf = at(box(dw - 1.5 * IN, dh - 2 * IN, gt, glass, { cast: false }),
                         0, (dh) / 2 + CONFIG.frameDepth / 2, z);
         g.add(leaf);
         const handle = at(box(1.2 * IN, 12 * IN, 1.2 * IN, mat.frame),
@@ -431,10 +577,19 @@
       const panelMat = new THREE.MeshStandardMaterial({ color: 0x1b2026, roughness: 0.55, metalness: 0.25 });
       g.add(at(box(panelW, panelH, panelT, panelMat), 0, panelH / 2, cz));
 
-      // Display: bezel + emissive panel on the front face.
+      // Display: bezel + an emissive panel whose face is a live canvas texture so the
+      // monitor can play the Ciena / Optical "stories" driven from the iPad.
       const scW = 8 * FT, scH = 4.6 * FT, scY = panelH * 0.46;
       g.add(at(box(scW + 4 * IN, scH + 4 * IN, 1 * IN, mat.frame), 0, scY, front - 0.6 * IN));
-      g.add(at(box(scW, scH, 0.8 * IN, mat.screen), 0, scY, front - 1.0 * IN));
+      const screenMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff, roughness: 0.3, metalness: 0.0,
+        map: story.texture, emissive: 0xffffff, emissiveMap: story.texture, emissiveIntensity: 0.85,
+      });
+      // A plane facing the room (-Z) — like the logo — so the texture isn't mirrored.
+      const screen = new THREE.Mesh(new THREE.PlaneGeometry(scW, scH), screenMat);
+      screen.position.set(0, scY, front - 1.0 * IN);
+      screen.rotation.y = Math.PI;
+      g.add(screen);
 
       // CIENA logo, centred above the display.
       const logoMat = new THREE.MeshBasicMaterial({ map: makeLogoTexture(), transparent: true });
@@ -508,17 +663,354 @@
     }
 
     // -----------------------------------------------------------------------
+    // Clock — drives glass tweens, the monitor stories and the iPad glow.
+    // -----------------------------------------------------------------------
+    const clock = new THREE.Clock();
+
+    // -----------------------------------------------------------------------
+    // Glass frosting — fade one wall between clear glass and opaque "frosted".
+    // Each wall owns its own material clone (see buildGlassWall), so the two
+    // walls toggle independently. Transitions run as small per-frame tweens.
+    // -----------------------------------------------------------------------
+    const glassTweens = [];
+    function setGlassFrosted(glassMat, on) {
+      const clear = glassMat.userData.clear;
+      const to = on
+        ? { transmission: 0.0, roughness: 0.9, opacity: 1.0, color: 0xdfe7ea }
+        : { transmission: clear.transmission, roughness: clear.roughness,
+            opacity: clear.opacity, color: clear.color };
+      const from = {
+        transmission: glassMat.transmission, roughness: glassMat.roughness,
+        opacity: glassMat.opacity, color: glassMat.color.getHex(),
+      };
+      // Replace any in-flight tween for this material.
+      for (let i = glassTweens.length - 1; i >= 0; i--) {
+        if (glassTweens[i].mat === glassMat) glassTweens.splice(i, 1);
+      }
+      glassTweens.push({
+        mat: glassMat, from, to, start: clock.getElapsedTime(), dur: 0.6,
+        cFrom: new THREE.Color(from.color), cTo: new THREE.Color(to.color),
+      });
+    }
+    function updateGlassTweens(now) {
+      for (let i = glassTweens.length - 1; i >= 0; i--) {
+        const tw = glassTweens[i];
+        let k = (now - tw.start) / tw.dur;
+        if (k >= 1) k = 1;
+        const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;  // ease-in-out
+        const m = tw.mat;
+        m.transmission = tw.from.transmission + (tw.to.transmission - tw.from.transmission) * e;
+        m.roughness    = tw.from.roughness    + (tw.to.roughness    - tw.from.roughness) * e;
+        m.opacity      = tw.from.opacity      + (tw.to.opacity      - tw.from.opacity) * e;
+        m.color.copy(tw.cFrom).lerp(tw.cTo, e);
+        if (k >= 1) glassTweens.splice(i, 1);
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Monitor "stories" — a live canvas texture on the media-wall screen that
+    // plays one of two looping branded animations (or sits on idle branding).
+    // -----------------------------------------------------------------------
+    const story = (() => {
+      const cv = document.createElement('canvas');
+      cv.width = 1024; cv.height = 576;
+      const ctx = cv.getContext('2d');
+      const texture = new THREE.CanvasTexture(cv);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 8;
+      const W = cv.width, Hh = cv.height;
+
+      let active = null;      // null | 'ciena' | 'optical'
+      let startT = 0;
+      let idleDrawn = false;
+
+      function bg(a, b) {
+        const grd = ctx.createLinearGradient(0, 0, 0, Hh);
+        grd.addColorStop(0, a); grd.addColorStop(1, b);
+        ctx.fillStyle = grd; ctx.fillRect(0, 0, W, Hh);
+      }
+      // A soft radial glow blob.
+      function glow(x, y, r, color, alpha) {
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, color);
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.globalAlpha = alpha; ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      // ----- Idle: static Ciena branding -----
+      function drawIdle() {
+        bg('#0c1622', '#070b10');
+        glow(W / 2, Hh * 0.42, 360, 'rgba(40,90,150,0.25)', 1);
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#e4002b';
+        ctx.font = '700 132px "Segoe UI", Arial, sans-serif';
+        ctx.fillText('CIENA', W / 2, Hh * 0.44);
+        ctx.fillStyle = '#9fb3c6';
+        ctx.font = '400 30px "Segoe UI", Arial, sans-serif';
+        ctx.fillText('EXECUTIVE BRIEFING CENTER', W / 2, Hh * 0.62);
+      }
+
+      // ----- Ciena story: an adaptive-network graph lighting up -----
+      const nodes = [
+        [0.16, 0.30], [0.30, 0.58], [0.27, 0.18], [0.46, 0.40], [0.62, 0.22],
+        [0.70, 0.56], [0.85, 0.34], [0.52, 0.70], [0.40, 0.44], [0.78, 0.74],
+      ];
+      const links = [[0, 2], [0, 1], [1, 8], [8, 3], [2, 3], [3, 4], [4, 5],
+                     [5, 6], [4, 6], [3, 7], [7, 5], [1, 7], [5, 9], [7, 9]];
+      function drawCiena(t) {
+        bg('#0a1420', '#04070c');
+        const px = (f) => f * W, py = (f) => f * Hh;
+        // Links
+        ctx.lineWidth = 2;
+        for (const [a, b] of links) {
+          ctx.strokeStyle = 'rgba(90,150,220,0.22)';
+          ctx.beginPath();
+          ctx.moveTo(px(nodes[a][0]), py(nodes[a][1]));
+          ctx.lineTo(px(nodes[b][0]), py(nodes[b][1]));
+          ctx.stroke();
+        }
+        // Pulses travelling along links
+        links.forEach(([a, b], i) => {
+          const p = ((t * 0.35 + i * 0.13) % 1);
+          const x = px(nodes[a][0] + (nodes[b][0] - nodes[a][0]) * p);
+          const y = py(nodes[a][1] + (nodes[b][1] - nodes[a][1]) * p);
+          glow(x, y, 26, 'rgba(120,190,255,0.9)', 0.9);
+        });
+        // Nodes, brightening in sequence
+        nodes.forEach(([nx, ny], i) => {
+          const b = 0.5 + 0.5 * Math.sin(t * 2 + i * 0.8);
+          const x = px(nx), y = py(ny);
+          const accent = (i % 4 === 0);
+          glow(x, y, 34, accent ? 'rgba(228,0,43,0.85)' : 'rgba(80,150,230,0.8)', 0.4 + 0.5 * b);
+          ctx.fillStyle = accent ? '#ff5577' : '#cfe6ff';
+          ctx.beginPath(); ctx.arc(x, y, 7 + 3 * b, 0, Math.PI * 2); ctx.fill();
+        });
+        // Title with a left-to-right reveal wipe over the first ~1.4s
+        const rev = Math.min(1, t / 1.4);
+        ctx.save();
+        ctx.beginPath(); ctx.rect(0, Hh * 0.70, W * rev, Hh * 0.30); ctx.clip();
+        const grd = ctx.createLinearGradient(0, Hh * 0.8, 0, Hh);
+        grd.addColorStop(0, 'rgba(6,10,16,0)'); grd.addColorStop(0.4, 'rgba(6,10,16,0.85)');
+        ctx.fillStyle = grd; ctx.fillRect(0, Hh * 0.70, W, Hh * 0.30);
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#e4002b';
+        ctx.font = '700 70px "Segoe UI", Arial, sans-serif';
+        ctx.fillText('CIENA', W / 2, Hh * 0.84);
+        ctx.fillStyle = '#cfe0ee';
+        ctx.font = '600 24px "Segoe UI", Arial, sans-serif';
+        ctx.fillText('THE ADAPTIVE NETWORK', W / 2, Hh * 0.93);
+        ctx.restore();
+      }
+
+      // ----- Optical story: light pulses down fibres + a wavelength spectrum -----
+      const fibreYs = [0.16, 0.26, 0.36, 0.46];
+      const hues = [180, 150, 280, 320];
+      function drawOptical(t) {
+        bg('#03101a', '#01060b');
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        // Fibres
+        fibreYs.forEach((fy, i) => {
+          const y = fy * Hh;
+          ctx.strokeStyle = `hsla(${hues[i]},80%,60%,0.18)`;
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+          // 3 pulses per fibre, varying speed
+          const speed = 0.18 + i * 0.05;
+          for (let p = 0; p < 3; p++) {
+            const x = (((t * speed + p / 3 + i * 0.11) % 1)) * (W + 120) - 60;
+            glow(x, y, 30, `hsla(${hues[i]},90%,65%,0.95)`, 0.9);
+          }
+        });
+        // Wavelength spectrum analyser along the bottom
+        const bars = 56, baseY = Hh * 0.92, maxH = Hh * 0.26;
+        const bw = W / bars;
+        for (let i = 0; i < bars; i++) {
+          const n = (Math.sin(t * 2.2 + i * 0.45) * 0.5 + 0.5) *
+                    (Math.sin(t * 0.9 + i * 0.2) * 0.3 + 0.7);
+          const h = 6 + n * maxH;
+          const hue = 200 + (i / bars) * 160;  // spectrum sweep
+          ctx.fillStyle = `hsla(${hue},85%,60%,0.9)`;
+          ctx.fillRect(i * bw + 2, baseY - h, bw - 3, h);
+        }
+        // Title
+        glow(W / 2, Hh * 0.62, 280, 'rgba(20,120,150,0.3)', 1);
+        ctx.fillStyle = '#56e0ff';
+        ctx.font = '700 76px "Segoe UI", Arial, sans-serif';
+        ctx.fillText('OPTICAL', W / 2, Hh * 0.60);
+        ctx.fillStyle = '#b8eeff';
+        ctx.font = '600 26px "Segoe UI", Arial, sans-serif';
+        ctx.fillText('WAVELOGIC · COHERENT OPTICS', W / 2, Hh * 0.70);
+      }
+
+      // Toggle: tapping the active story stops it (back to idle).
+      function play(name, now) {
+        active = (active === name) ? null : name;
+        startT = now;
+        idleDrawn = false;
+        return active;
+      }
+      function update(now) {
+        if (active === 'ciena')        { drawCiena(now - startT);   texture.needsUpdate = true; }
+        else if (active === 'optical') { drawOptical(now - startT); texture.needsUpdate = true; }
+        else if (!idleDrawn)           { drawIdle(); idleDrawn = true; texture.needsUpdate = true; }
+      }
+      drawIdle();  // paint something before the first frame
+      return { texture, play, update, current: () => active };
+    })();
+
+    // -----------------------------------------------------------------------
+    // iPad control terminal on the table — clicking it opens the menu overlay.
+    // -----------------------------------------------------------------------
+    function makeIpadTexture() {
+      const cv = document.createElement('canvas');
+      cv.width = 512; cv.height = 384;
+      const ctx = cv.getContext('2d');
+      const grd = ctx.createLinearGradient(0, 0, 0, cv.height);
+      grd.addColorStop(0, '#16263c'); grd.addColorStop(1, '#0a121d');
+      ctx.fillStyle = grd; ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#e4002b';
+      ctx.font = '700 54px "Segoe UI", Arial, sans-serif';
+      ctx.fillText('CIENA', cv.width / 2, 120);
+      // play glyph in a ring
+      ctx.strokeStyle = 'rgba(120,180,240,0.6)'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(cv.width / 2, 210, 40, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#cfe6ff';
+      ctx.beginPath();
+      ctx.moveTo(cv.width / 2 - 12, 190); ctx.lineTo(cv.width / 2 - 12, 230);
+      ctx.lineTo(cv.width / 2 + 22, 210); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#eaf1f8';
+      ctx.font = '600 30px "Segoe UI", Arial, sans-serif';
+      ctx.fillText('TAP TO CONTROL', cv.width / 2, 300);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+      return tex;
+    }
+
+    let ipadFaceMat = null;     // for the idle glow pulse in animate()
+    function buildIpad() {
+      const g = new THREE.Group(); g.name = 'iPad';
+      const w = 1.05 * FT, h = 0.8 * FT, t = 0.3 * IN;     // a generous, easy-to-spot tablet
+      const bodyMat = new THREE.MeshStandardMaterial({ color: 0x0c0e12, roughness: 0.35, metalness: 0.6 });
+
+      const tablet = new THREE.Group();
+      tablet.add(box(w, h, t, bodyMat));
+      const faceTex = makeIpadTexture();
+      ipadFaceMat = new THREE.MeshStandardMaterial({
+        map: faceTex, emissive: 0xffffff, emissiveMap: faceTex,
+        emissiveIntensity: 0.7, roughness: 0.25, metalness: 0.0,
+      });
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.92, h * 0.9), ipadFaceMat);
+      face.position.z = t / 2 + 0.001;
+      tablet.add(face);
+      // Recline the tablet on its stand so the screen faces up toward the user.
+      tablet.rotation.x = -0.72;
+      tablet.position.y = h * 0.42;
+      g.add(tablet);
+      // Small stand puck under it.
+      g.add(at(cyl(0.045, 0.06, 0.02, mat.tableBase), 0, 0.01, 0.02));
+
+      // Place on the table top, near one end, turned slightly toward the camera.
+      g.position.set(CONFIG.tableLength * 0.30, CONFIG.tableHeight + 0.01, D / 2 + 0.05);
+      g.rotation.y = 0.5;
+      root.add(g);
+      return g;
+    }
+
+    // -----------------------------------------------------------------------
     // Build everything
     // -----------------------------------------------------------------------
     buildFloors();
     buildCeilings();
-    buildGlassWall(0,  { door: true,  name: 'NearGlassWall' });
-    buildGlassWall(-W, { door: false, name: 'FarGlassWall' });
+    const nearWall = buildGlassWall(0,  { door: true,  name: 'NearGlassWall' });
+    const farWall  = buildGlassWall(-W, { door: false, name: 'FarGlassWall' });
     buildTable();
     placeChairs();
     buildMediaWall();
     buildCeilingLights();
     buildLighting();
+    const ipadGroup = buildIpad();
+
+    // -----------------------------------------------------------------------
+    // iPad interaction — raycast clicks (distinguished from orbit drags) open
+    // the menu overlay; the overlay's tiles drive the scene directly.
+    // -----------------------------------------------------------------------
+    const raycaster = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    let ipadHover = false;
+    let downX = 0, downY = 0, downT = 0;
+
+    function ipadHit(clientX, clientY) {
+      ndc.x = (clientX / window.innerWidth) * 2 - 1;
+      ndc.y = -(clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(ndc, camera);
+      return raycaster.intersectObject(ipadGroup, true).length > 0;
+    }
+    renderer.domElement.addEventListener('pointerdown', (e) => {
+      downX = e.clientX; downY = e.clientY; downT = performance.now();
+    });
+    renderer.domElement.addEventListener('pointerup', (e) => {
+      const moved = Math.hypot(e.clientX - downX, e.clientY - downY);
+      if (moved > 6 || performance.now() - downT > 600) return;   // it was a drag
+      if (ipadHit(e.clientX, e.clientY)) openOverlay();
+    });
+    renderer.domElement.addEventListener('pointermove', (e) => {
+      ipadHover = ipadHit(e.clientX, e.clientY);
+      renderer.domElement.style.cursor = ipadHover ? 'pointer' : '';
+    });
+
+    // ----- Overlay wiring -----
+    const overlay = document.getElementById('ipad-overlay');
+    const cienaTile = overlay.querySelector('[data-action="ciena-story"]');
+    const opticalTile = overlay.querySelector('[data-action="optical-story"]');
+    const glassFrosted = { near: false, far: false };
+
+    function openOverlay() {
+      overlay.classList.add('open');
+      overlay.setAttribute('aria-hidden', 'false');
+    }
+    function closeOverlay() {
+      overlay.classList.remove('open');
+      overlay.setAttribute('aria-hidden', 'true');
+    }
+    function setTileState(tile, on, text) {
+      tile.classList.toggle('active', on);
+      tile.querySelector('.state').textContent = text;
+    }
+    function refreshStoryTiles() {
+      const a = story.current();
+      setTileState(cienaTile,   a === 'ciena',   a === 'ciena'   ? 'Playing' : 'Off');
+      setTileState(opticalTile, a === 'optical', a === 'optical' ? 'Playing' : 'Off');
+    }
+    function handleAction(action, tile) {
+      if (action === 'conf-glass') {
+        glassFrosted.near = !glassFrosted.near;
+        setGlassFrosted(nearWall.userData.glassMat, glassFrosted.near);
+        setTileState(tile, glassFrosted.near, glassFrosted.near ? 'Frosted' : 'Clear');
+      } else if (action === 'lab-glass') {
+        glassFrosted.far = !glassFrosted.far;
+        setGlassFrosted(farWall.userData.glassMat, glassFrosted.far);
+        setTileState(tile, glassFrosted.far, glassFrosted.far ? 'Frosted' : 'Clear');
+      } else if (action === 'ciena-story') {
+        story.play('ciena', clock.getElapsedTime());
+        refreshStoryTiles();
+      } else if (action === 'optical-story') {
+        story.play('optical', clock.getElapsedTime());
+        refreshStoryTiles();
+      }
+    }
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) { closeOverlay(); return; }     // backdrop
+      const tile = e.target.closest('[data-action]');
+      if (!tile) return;
+      if (tile.dataset.action === 'close') { closeOverlay(); return; }
+      handleAction(tile.dataset.action, tile);
+    });
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && overlay.classList.contains('open')) closeOverlay();
+    });
 
     // -----------------------------------------------------------------------
     // Resize + render loop
@@ -532,7 +1024,14 @@
     let started = false;
     function animate() {
       requestAnimationFrame(animate);
+      const now = clock.getElapsedTime();
       controls.update();
+      updateGlassTweens(now);
+      story.update(now);
+      // Idle breathing glow on the iPad screen (a touch brighter on hover).
+      if (ipadFaceMat) {
+        ipadFaceMat.emissiveIntensity = (ipadHover ? 1.0 : 0.7) + Math.sin(now * 2) * 0.12;
+      }
       renderer.render(scene, camera);
       if (!started) {
         started = true;
@@ -543,7 +1042,8 @@
     animate();
 
     // Expose for debugging / tweaking from the console.
-    window.EBC = { scene, camera, renderer, controls, CONFIG, mat, root, THREE };
+    window.EBC = { scene, camera, renderer, controls, CONFIG, mat, root, THREE,
+                   nearWall, farWall, ipadGroup, story, setGlassFrosted, openOverlay };
   </script>
 </body>
 </html>
