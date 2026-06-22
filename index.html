@@ -307,7 +307,7 @@
     scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
     const camera = new THREE.PerspectiveCamera(
-      52, window.innerWidth / window.innerHeight, 0.05, 200
+      52, window.innerWidth / window.innerHeight, 0.1, 200
     );
     camera.position.set(L * 0.40, 1.75, D * 0.92);
 
@@ -339,12 +339,14 @@
                                                   emissive: C.brandBlue, emissiveIntensity: 0.15 }),
       lens:      new THREE.MeshStandardMaterial({ color: C.lens, emissive: C.lens, emissiveIntensity: 1.4,
                                                   roughness: 0.6 }),
-      // Transmissive architectural glass.
+      // Transmissive architectural glass. A low `thickness` keeps it reading as a thin
+      // pane: high thickness makes the panes lens the room into a flipped ("mirror")
+      // image, which looked like the door had a duplicate of itself.
       glass: new THREE.MeshPhysicalMaterial({
         color: C.glassTint, metalness: 0, roughness: 0.04,
-        transmission: 1.0, ior: 1.5, thickness: 0.6,
+        transmission: 1.0, ior: 1.5, thickness: 0.05,
         transparent: true, opacity: 1.0,
-        envMapIntensity: 1.2, clearcoat: 0.15, clearcoatRoughness: 0.1,
+        envMapIntensity: 0.9, clearcoat: 0.12, clearcoatRoughness: 0.1,
       }),
     };
 
@@ -402,7 +404,7 @@
       return at(box(CONFIG.frameDepth, h, CONFIG.frameDepth, mat.frame), x, h / 2, z);
     }
 
-    // Near glass wall (Z = 0) with a centred door opening; far wall (Z = -W) solid.
+    // Near glass wall (Z = 0) with a door at each far end; far wall (Z = -W) solid.
     function buildGlassWall(z, { door = false, name = 'GlassWall' } = {}) {
       const g = new THREE.Group(); g.name = name;
       const gt = CONFIG.glassThickness;
@@ -437,34 +439,43 @@
           if (i > 0) g.add(mullion(-L / 2 + bayW * i, z));
         }
       } else {
-        // Glazed wall with a door gap: left panel | door | right panel, + transom.
+        // Glazed wall with a door tucked against each far end and a continuous
+        // glazed span filling the middle: door | glass…glass | door.
         const dw = CONFIG.doorWidth;
         const dh = CONFIG.doorHeight;
-        const sideW = (L - dw) / 2;                          // each side panel width
+        const fd = CONFIG.frameDepth;
+        const xL = -L / 2 + fd + dw / 2;                     // left door centre
+        const xR =  L / 2 - fd - dw / 2;                     // right door centre
 
-        // Left & right fixed panels (full height between sill & head)
-        g.add(at(box(sideW - CONFIG.frameDepth, glassH, gt, glass, { cast: false }),
-                 -L / 2 + sideW / 2, glassY, z));
-        g.add(at(box(sideW - CONFIG.frameDepth, glassH, gt, glass, { cast: false }),
-                  L / 2 - sideW / 2, glassY, z));
-        // Mullions either side of the door
-        g.add(mullion(-dw / 2, z));
-        g.add(mullion( dw / 2, z));
-        // Transom (glass above the door)
-        const transH = (H - CONFIG.frameDepth) - dh;
-        if (transH > 0.02) {
-          g.add(at(box(dw, transH, gt, glass, { cast: false }),
-                   0, dh + transH / 2 + CONFIG.frameDepth / 2, z));
-          g.add(at(box(dw, CONFIG.frameDepth, CONFIG.frameDepth, mat.frame),
-                   0, dh + CONFIG.frameDepth / 2, z));       // door head rail
+        // One door at centre cx; its inner edge gets a mullion, the outer edge
+        // shares the wall's end mullion. `handleSide` faces the handle inward.
+        function addDoor(cx, handleSide) {
+          g.add(mullion(cx + handleSide * dw / 2, z));       // inner mullion
+          const transH = (H - fd) - dh;                      // transom above the door
+          if (transH > 0.02) {
+            g.add(at(box(dw, transH, gt, glass, { cast: false }),
+                     cx, dh + transH / 2 + fd / 2, z));
+            g.add(at(box(dw, fd, fd, mat.frame), cx, dh + fd / 2, z));   // head rail
+          }
+          // Door leaf (inset glass pane) + a pull handle on the inner edge.
+          g.add(at(box(dw - 1.5 * IN, dh - 2 * IN, gt, glass, { cast: false }),
+                   cx, dh / 2 + fd / 2, z));
+          g.add(at(box(1.2 * IN, 12 * IN, 1.2 * IN, mat.frame),
+                   cx + handleSide * (dw / 2 - 4 * IN), 1.05, z + gt));
         }
-        // The door leaf — a single glass pane, slightly inset, with a pull handle.
-        const leaf = at(box(dw - 1.5 * IN, dh - 2 * IN, gt, glass, { cast: false }),
-                        0, (dh) / 2 + CONFIG.frameDepth / 2, z);
-        g.add(leaf);
-        const handle = at(box(1.2 * IN, 12 * IN, 1.2 * IN, mat.frame),
-                          dw / 2 - 4 * IN, 1.05, z + gt);
-        g.add(handle);
+        addDoor(xL,  1);                                     // left door, handle toward centre
+        addDoor(xR, -1);                                     // right door, handle toward centre
+
+        // Continuous glazed span between the two doors, split by a few mullions.
+        const midL = xL + dw / 2, midR = xR - dw / 2;
+        const midW = midR - midL;
+        const bays = Math.max(1, Math.round(midW / (8 * FT)));
+        const bayW = midW / bays;
+        for (let i = 0; i < bays; i++) {
+          const cx = midL + bayW * (i + 0.5);
+          g.add(at(box(bayW - fd, glassH, gt, glass, { cast: false }), cx, glassY, z));
+          if (i > 0) g.add(mullion(midL + bayW * i, z));
+        }
       }
 
       root.add(g);
@@ -507,12 +518,16 @@
     function makeChair() {
       const g = new THREE.Group(); g.name = 'Chair';
       const seatH = 0.46, seatW = 0.5, seatD = 0.5;
-      // Thick seat cushion + backrest (solid forms, not thin plates).
+      // Thick seat cushion + backrest (solid forms, not thin plates). The backrest is
+      // pulled forward so its back face does NOT share the seat's back plane (z = -seatD/2),
+      // which would otherwise z-fight and flicker as a "growing cube" when orbiting.
       g.add(at(box(seatW, 0.12, seatD, mat.chair), 0, seatH, 0));
-      g.add(at(box(seatW, 0.52, 0.08, mat.chair), 0, seatH + 0.30, -seatD / 2 + 0.04));
+      g.add(at(box(seatW, 0.52, 0.08, mat.chair), 0, seatH + 0.30, -seatD / 2 + 0.09));
       // Pedestal: gas column + disc base (cylinders — orbit-stable, no size flicker).
-      g.add(at(cyl(0.03, 0.03, seatH - 0.06, mat.tableBase), 0, (seatH - 0.06) / 2, 0));
-      g.add(at(cyl(0.27, 0.30, 0.05, mat.tableBase), 0, 0.025, 0));
+      // The column runs UP INTO the seat (top above seatH) so its cap never lies exactly
+      // on the seat's underside plane — another coincident-face source of flicker.
+      g.add(at(cyl(0.03, 0.03, seatH + 0.04, mat.tableBase), 0, (seatH + 0.04) / 2, 0));
+      g.add(at(cyl(0.27, 0.30, 0.05, mat.tableBase), 0, 0.026, 0));
       return g;
     }
 
@@ -901,9 +916,10 @@
       ipadFaceMat = new THREE.MeshStandardMaterial({
         map: faceTex, emissive: 0xffffff, emissiveMap: faceTex,
         emissiveIntensity: 0.7, roughness: 0.25, metalness: 0.0,
+        polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
       });
       const face = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.92, h * 0.9), ipadFaceMat);
-      face.position.z = t / 2 + 0.001;
+      face.position.z = t / 2 + 0.004;
       tablet.add(face);
       // Recline the tablet on its stand so the screen faces up toward the user.
       tablet.rotation.x = -0.72;
