@@ -371,7 +371,6 @@
       labLens:   new THREE.MeshStandardMaterial({ color: C.lens, emissive: C.lens, emissiveIntensity: 1.2,
                                                   roughness: 0.6 }),
       rack:      new THREE.MeshStandardMaterial({ color: 0x14171c, roughness: 0.5, metalness: 0.6 }),
-      bench:     new THREE.MeshStandardMaterial({ color: 0xe2e6ea, roughness: 0.4, metalness: 0.05 }),
       // Transmissive architectural glass. A low `thickness` keeps it reading as a thin
       // pane: high thickness makes the panes lens the room into a flipped ("mirror")
       // image, which looked like the door had a duplicate of itself.
@@ -437,8 +436,9 @@
       return at(box(CONFIG.frameDepth, h, CONFIG.frameDepth, mat.frame), x, h / 2, z);
     }
 
-    // Near glass wall (Z = 0) with a door at each far end; far wall (Z = -W) solid.
-    function buildGlassWall(z, { door = false, name = 'GlassWall' } = {}) {
+    // A glazed wall at plane Z=z. `doors` is a list of {cx, width, handleSide}
+    // door openings; the glass is bayed in around them.
+    function buildGlassWall(z, { doors = [], name = 'GlassWall' } = {}) {
       const g = new THREE.Group(); g.name = name;
       const gt = CONFIG.glassThickness;
 
@@ -468,54 +468,46 @@
       const glassH = H - CONFIG.frameDepth;                  // between sill & head
       const glassY = CONFIG.frameDepth + glassH / 2;
 
-      if (!door) {
-        // Single continuous glazed wall, split by a few mullions for realism.
-        const bays = 4;
-        const bayW = L / bays;
-        for (let i = 0; i < bays; i++) {
-          const cx = -L / 2 + bayW * (i + 0.5);
-          g.add(at(box(bayW - CONFIG.frameDepth, glassH, gt, glass, { cast: false }), cx, glassY, z));
-          if (i > 0) g.add(mullion(-L / 2 + bayW * i, z));
-        }
-      } else {
-        // Glazed wall with a door tucked against each far end and a continuous
-        // glazed span filling the middle: door | glass…glass | door.
-        const dw = CONFIG.doorWidth;
-        const dh = CONFIG.doorHeight;
-        const fd = CONFIG.frameDepth;
-        const xL = -L / 2 + fd + dw / 2;                     // left door centre
-        const xR =  L / 2 - fd - dw / 2;                     // right door centre
+      const fd = CONFIG.frameDepth;
+      const dh = CONFIG.doorHeight;
+      const leftEnd = -L / 2 + fd, rightEnd = L / 2 - fd;
 
-        // One door at centre cx; its inner edge gets a mullion, the outer edge
-        // shares the wall's end mullion. `handleSide` faces the handle inward.
-        function addDoor(cx, handleSide) {
-          g.add(mullion(cx + handleSide * dw / 2, z));       // inner mullion
-          const transH = (H - fd) - dh;                      // transom above the door
-          if (transH > 0.02) {
-            g.add(at(box(dw, transH, gt, glass, { cast: false }),
-                     cx, dh + transH / 2 + fd / 2, z));
-            g.add(at(box(dw, fd, fd, mat.frame), cx, dh + fd / 2, z));   // head rail
-          }
-          // Door leaf (inset glass pane) + a pull handle on the inner edge.
-          g.add(at(box(dw - 1.5 * IN, dh - 2 * IN, gt, glass, { cast: false }),
-                   cx, dh / 2 + fd / 2, z));
-          g.add(at(box(1.2 * IN, 12 * IN, 1.2 * IN, mat.frame),
-                   cx + handleSide * (dw / 2 - 4 * IN), 1.05, z + gt));
-        }
-        addDoor(xL,  1);                                     // left door, handle toward centre
-        addDoor(xR, -1);                                     // right door, handle toward centre
-
-        // Continuous glazed span between the two doors, split by a few mullions.
-        const midL = xL + dw / 2, midR = xR - dw / 2;
-        const midW = midR - midL;
-        const bays = Math.max(1, Math.round(midW / (8 * FT)));
-        const bayW = midW / bays;
+      // Glaze a horizontal segment [xs, xe] into bays, with intermediate mullions
+      // (none at the segment ends — those are framed by their neighbours).
+      function glazeSpan(xs, xe) {
+        const w = xe - xs;
+        if (w < 0.02) return;
+        const bays = Math.max(1, Math.round(w / (8 * FT)));
+        const bayW = w / bays;
         for (let i = 0; i < bays; i++) {
-          const cx = midL + bayW * (i + 0.5);
-          g.add(at(box(bayW - fd, glassH, gt, glass, { cast: false }), cx, glassY, z));
-          if (i > 0) g.add(mullion(midL + bayW * i, z));
+          g.add(at(box(bayW - fd, glassH, gt, glass, { cast: false }), xs + bayW * (i + 0.5), glassY, z));
+          if (i > 0) g.add(mullion(xs + bayW * i, z));
         }
       }
+      // A glazed door leaf + transom + pull handle, centred at cx.
+      function addDoor(cx, dw, handleSide) {
+        const transH = (H - fd) - dh;
+        if (transH > 0.02) {
+          g.add(at(box(dw, transH, gt, glass, { cast: false }), cx, dh + transH / 2 + fd / 2, z));
+          g.add(at(box(dw, fd, fd, mat.frame), cx, dh + fd / 2, z));      // head rail
+        }
+        g.add(at(box(dw - 1.5 * IN, dh - 2 * IN, gt, glass, { cast: false }), cx, dh / 2 + fd / 2, z));
+        g.add(at(box(1.2 * IN, 12 * IN, 1.2 * IN, mat.frame),
+                 cx + handleSide * (dw / 2 - 4 * IN), 1.05, z + gt));     // pull handle
+      }
+
+      // Walk left→right, glazing each span between the wall ends and the doors and
+      // framing every door edge with a mullion (except where it meets an end one).
+      let cursor = leftEnd;
+      for (const d of doors.slice().sort((a, b) => a.cx - b.cx)) {
+        const dLeft = d.cx - d.width / 2, dRight = d.cx + d.width / 2;
+        glazeSpan(cursor, dLeft);
+        if (Math.abs(dLeft - leftEnd) > 0.01) g.add(mullion(dLeft, z));
+        if (Math.abs(dRight - rightEnd) > 0.01) g.add(mullion(dRight, z));
+        addDoor(d.cx, d.width, d.handleSide);
+        cursor = dRight;
+      }
+      glazeSpan(cursor, rightEnd);
 
       root.add(g);
       return g;
@@ -663,30 +655,19 @@
     // Lab room — across the hallway, centred on the conference room. Its front
     // is the existing far glass wall (Z = -W); it extends back to Z = -W - labW.
     // -----------------------------------------------------------------------
-    // A test/equipment rack: dark cabinet with a column of emissive indicators
-    // on the face that points toward the glass (+Z), so they read from the hall.
+    // A 19" equipment rack (19" internal mounting + ~1" of frame each side →
+    // ~21" external): dark cabinet with a column of emissive indicators on the
+    // face that points toward the glass (+Z), so they read from the hall.
+    const RACK_W = 21 * IN;
     function makeRack() {
       const g = new THREE.Group(); g.name = 'Rack';
-      const w = 2 * FT, d = 2.4 * FT, h = 6.6 * FT;
+      const w = RACK_W, d = 2.4 * FT, h = 6.6 * FT;
       g.add(at(box(w, h, d, mat.rack), 0, h / 2, 0));
       const ledMat = new THREE.MeshStandardMaterial({ color: 0x39ffd0, emissive: 0x39ffd0,
         emissiveIntensity: 1.8, roughness: 0.5 });
       for (let i = 0; i < 7; i++) {
         g.add(at(box(w * 0.66, 0.7 * IN, 0.4 * IN, ledMat), 0, h * 0.22 + i * (h * 0.52 / 6), d / 2 + 0.3 * IN));
       }
-      return g;
-    }
-    // A low lab bench / island: white worktop on a dark cabinet, with a small
-    // emissive instrument box on top.
-    function makeBench(len) {
-      const g = new THREE.Group(); g.name = 'Bench';
-      const h = 0.9, d = 2.2 * FT, topT = 1.6 * IN;
-      g.add(at(box(len, topT, d, mat.bench), 0, h - topT / 2, 0));
-      g.add(at(box(len - 2 * IN, h - topT, d * 0.86, mat.rack), 0, (h - topT) / 2, 0));
-      const instrMat = new THREE.MeshStandardMaterial({ color: 0x0c1016, roughness: 0.3, metalness: 0.3,
-        emissive: 0x1d6cff, emissiveIntensity: 0.7 });
-      g.add(at(box(len * 0.22, 8 * IN, d * 0.5, instrMat), -len * 0.28, h + 4 * IN, 0));
-      g.add(at(box(len * 0.16, 5 * IN, d * 0.5, instrMat),  len * 0.30, h + 2.5 * IN, 0));
       return g;
     }
     function buildLab() {
@@ -722,19 +703,18 @@
         g.add(ral);
       }
 
-      // Back-wall row of equipment racks (the clearest "this is a lab" signal),
-      // facing the glass so the indicator lights read from the conference room.
-      const nRacks = 7, rackSpan = labL * 0.82, rackD = 2.4 * FT;
+      // Row of 10 equipment racks across the lab front, 6" apart, with the
+      // rightmost set 5 ft from the right-hand wall; all face the glass so the
+      // indicator lights read from the conference room. The row is set 5 ft back
+      // from the glass (depth).
+      const nRacks = 10, rackW = RACK_W, gap = 6 * IN, rackD = 2.4 * FT;
+      const rackZ = zFront - 5 * FT - rackD / 2;       // 5 ft off the glass
+      const pitch = rackW + gap;                       // centre-to-centre
+      const xRight = xHalf - 5 * FT - rackW / 2;       // rightmost rack centre
       for (let i = 0; i < nRacks; i++) {
         const rk = makeRack();
-        rk.position.set(-rackSpan / 2 + (rackSpan / (nRacks - 1)) * i, 0, zBack + wt + rackD / 2 + 2 * IN);
+        rk.position.set(xRight - pitch * i, 0, rackZ); // march left from the right wall
         g.add(rk);
-      }
-      // Two lab-bench islands in the middle of the room.
-      for (const sx of [-1, 1]) {
-        const b = makeBench(labL * 0.30);
-        b.position.set(sx * labL * 0.22, 0, cz + labW * 0.06);
-        g.add(b);
       }
 
       root.add(g);
@@ -1074,8 +1054,19 @@
     // -----------------------------------------------------------------------
     buildFloors();
     buildCeilings();
-    const nearWall = buildGlassWall(0,  { door: true,  name: 'NearGlassWall' });
-    const farWall  = buildGlassWall(-W, { door: false, name: 'FarGlassWall' });
+    const nearWall = buildGlassWall(0, {
+      name: 'NearGlassWall',
+      doors: [   // a door tucked against each far end of the conference-room wall
+        { cx: -L / 2 + CONFIG.frameDepth + CONFIG.doorWidth / 2, width: CONFIG.doorWidth, handleSide:  1 },
+        { cx:  L / 2 - CONFIG.frameDepth - CONFIG.doorWidth / 2, width: CONFIG.doorWidth, handleSide: -1 },
+      ],
+    });
+    // Lab glass wall: a single 3 ft door on the right side of the lab frontage
+    // (its right edge meets the lab's right-hand wall at x = +labLength/2).
+    const farWall = buildGlassWall(-W, {
+      name: 'FarGlassWall',
+      doors: [ { cx: CONFIG.labLength / 2 - (3 * FT) / 2, width: 3 * FT, handleSide: -1 } ],
+    });
     buildTable();
     placeChairs();
     buildMediaWall();
