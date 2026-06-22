@@ -411,12 +411,18 @@
 
       // Each wall gets its OWN glass material clone so it can be frosted opaque
       // independently of the other. Remember the clear-glass values for toggling back.
+      // A pre-set (but zero-intensity) emissive lets the frost state glow like backlit
+      // privacy glass — without it, frosting the far wall is invisible from the room
+      // (it's a matte panel in a dim hall, seen through the near glass).
       const glass = mat.glass.clone();
+      glass.emissive = new THREE.Color(0xdfe9f0);
+      glass.emissiveIntensity = 0;
       glass.userData.clear = {
         color: glass.color.getHex(),
         transmission: glass.transmission,
         roughness: glass.roughness,
         opacity: glass.opacity,
+        emissiveIntensity: 0,
       };
       g.userData.glassMat = glass;
 
@@ -691,13 +697,20 @@
     function setGlassFrosted(glassMat, on) {
       const clear = glassMat.userData.clear;
       const to = on
-        ? { transmission: 0.0, roughness: 0.9, opacity: 1.0, color: 0xdfe7ea }
+        ? { transmission: 0.0, roughness: 0.9, opacity: 1.0, color: 0xe7eef3, emissiveIntensity: 0.6 }
         : { transmission: clear.transmission, roughness: clear.roughness,
-            opacity: clear.opacity, color: clear.color };
+            opacity: clear.opacity, color: clear.color, emissiveIntensity: clear.emissiveIntensity };
       const from = {
         transmission: glassMat.transmission, roughness: glassMat.roughness,
         opacity: glassMat.opacity, color: glassMat.color.getHex(),
+        emissiveIntensity: glassMat.emissiveIntensity,
       };
+      // Frosted = fully opaque. three.js's transmission pass only captures OPAQUE
+      // objects, so a `transparent` wall is invisible behind the near glass. Flipping
+      // `transparent` off when frosted lets the lab wall show through the near wall
+      // from inside the conference room (clear glass stays transparent as normal).
+      glassMat.transparent = !on;
+      glassMat.needsUpdate = true;
       // Replace any in-flight tween for this material.
       for (let i = glassTweens.length - 1; i >= 0; i--) {
         if (glassTweens[i].mat === glassMat) glassTweens.splice(i, 1);
@@ -717,6 +730,7 @@
         m.transmission = tw.from.transmission + (tw.to.transmission - tw.from.transmission) * e;
         m.roughness    = tw.from.roughness    + (tw.to.roughness    - tw.from.roughness) * e;
         m.opacity      = tw.from.opacity      + (tw.to.opacity      - tw.from.opacity) * e;
+        m.emissiveIntensity = tw.from.emissiveIntensity + (tw.to.emissiveIntensity - tw.from.emissiveIntensity) * e;
         m.color.copy(tw.cFrom).lerp(tw.cTo, e);
         if (k >= 1) glassTweens.splice(i, 1);
       }
