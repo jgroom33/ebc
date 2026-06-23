@@ -687,13 +687,14 @@
 };
     /* LAB-RACKS-END */
 
-    // A 19" equipment rack: 45U of mounting space (19" internal + ~1" frame each side
+    // A 19" equipment rack: 58U of mounting space (19" internal + ~1" frame each side
     // → ~21" external). Devices are placed by RU, RU 1 at the bottom, coloured by type.
     const RACK_W = 21 * IN;
-    const U_M = 1.75 * IN;                 // one rack unit
+    const RACK_U = 58;                      // rack height in rack units
+    const U_M = 1.75 * IN;                  // one rack unit
     const RACK_PLINTH = 1.5 * IN;          // frame below RU 1
     const RACK_D = 2.4 * FT;
-    const RACK_H = RACK_PLINTH + 45 * U_M + 1.5 * IN;
+    const RACK_H = RACK_PLINTH + RACK_U * U_M + 1.5 * IN;
     const DEV_FRONT = RACK_D / 2 + 0.3 * IN;   // device-face offset from rack centre (+Z)
     const fiberMats = [];                      // fat-line materials (need resolution on resize)
 
@@ -759,17 +760,20 @@
       const cz = (zFront + zBack) / 2;         // lab centre (z)
       const wt = CONFIG.wallThickness;
       const ft = 2 * IN, ct = 4 * IN;
+      const labH = H + 2 * FT;                  // lab ceiling sits 2 ft above the room/hall
 
       // Shell: floor, ceiling, opaque back + side walls (front stays open to glass).
       g.add(at(box(labL, ft, labW, mat.labFloor, { cast: false }), 0, -ft / 2, cz));
-      g.add(at(box(labL + 2 * wt, ct, labW, mat.ceiling, { cast: false }), 0, H + ct / 2, cz));
-      g.add(at(box(labL + 2 * wt, H, wt, mat.wall), 0, H / 2, zBack - wt / 2));
-      g.add(at(box(wt, H, labW, mat.wall), -xHalf - wt / 2, H / 2, cz));
-      g.add(at(box(wt, H, labW, mat.wall),  xHalf + wt / 2, H / 2, cz));
+      g.add(at(box(labL + 2 * wt, ct, labW, mat.ceiling, { cast: false }), 0, labH + ct / 2, cz));
+      g.add(at(box(labL + 2 * wt, labH, wt, mat.wall), 0, labH / 2, zBack - wt / 2));
+      g.add(at(box(wt, labH, labW, mat.wall), -xHalf - wt / 2, labH / 2, cz));
+      g.add(at(box(wt, labH, labW, mat.wall),  xHalf + wt / 2, labH / 2, cz));
+      // Front bulkhead above the 9 ft glass wall, closing the taller lab to its ceiling.
+      g.add(at(box(labL + 2 * wt, labH - H, wt, mat.wall), 0, (H + labH) / 2, zFront + wt / 2));
 
       // Ceiling light panels (+ a few area lights NOT registered with Demo Mode,
       // so the lab stays lit and back-lights the frosted glass during the demo).
-      const lp = 2 * FT, ly = H - 1 * IN, cols = 4, rows = 2;
+      const lp = 2 * FT, ly = labH - 1 * IN, cols = 4, rows = 2;
       const mX = labL * 0.16, mZ = labW * 0.20;
       for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) {
         const x = -xHalf + mX + (labL - 2 * mX) * (c / (cols - 1));
