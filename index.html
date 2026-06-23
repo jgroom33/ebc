@@ -210,22 +210,6 @@
               <span class="desc">Frost the lab glass across the hall</span>
             </span>
           </button>
-          <button class="tile" data-action="ciena-story">
-            <span class="state">Off</span>
-            <span class="icon">▶</span>
-            <span>
-              <span class="label">Ciena Story</span>
-              <span class="desc">Play the Ciena story on the monitor</span>
-            </span>
-          </button>
-          <button class="tile" data-action="optical-story">
-            <span class="state">Off</span>
-            <span class="icon">✦</span>
-            <span>
-              <span class="label">Optical Story</span>
-              <span class="desc">Play the optical story on the monitor</span>
-            </span>
-          </button>
         </div>
       </div>
     </div>
@@ -277,8 +261,8 @@
       glassThickness:  1 * IN,
       frameDepth:      2 * IN,  // mullion / frame profile
       // Lab room (across the hallway, centred on the conference room) ---------
-      labLength:      30 * FT,  // X — centred across from the conference room
-      labWidth:       18 * FT,  // Z — depth, back from the shared glass wall
+      labLength:      31 * FT,  // X — centred across from the conference room
+      labWidth:       23 * FT,  // Z — depth, back from the shared glass wall
       // Enclosed room to the right (+X) of the conference room ----------------
       rightRoomWidth: 14.5 * FT,  // X — its depth (Z) matches the conference room
       // Door opening in the near glass wall --------------------------------
@@ -444,7 +428,7 @@
 
     // A glazed wall at plane Z=z. `doors` is a list of {cx, width, handleSide}
     // door openings; the glass is bayed in around them.
-    function buildGlassWall(z, { doors = [], name = 'GlassWall' } = {}) {
+    function buildGlassWall(z, { doors = [], solid = [], name = 'GlassWall' } = {}) {
       const g = new THREE.Group(); g.name = name;
       const gt = CONFIG.glassThickness;
 
@@ -478,9 +462,9 @@
       const dh = CONFIG.doorHeight;
       const leftEnd = -L / 2 + fd, rightEnd = L / 2 - fd;
 
-      // Glaze a horizontal segment [xs, xe] into bays, with intermediate mullions
+      // Glaze a horizontal segment [xs, xe] into glass bays, with intermediate mullions
       // (none at the segment ends — those are framed by their neighbours).
-      function glazeSpan(xs, xe) {
+      function glazeBays(xs, xe) {
         const w = xe - xs;
         if (w < 0.02) return;
         const bays = Math.max(1, Math.round(w / (8 * FT)));
@@ -488,6 +472,28 @@
         for (let i = 0; i < bays; i++) {
           g.add(at(box(bayW - fd, glassH, gt, glass, { cast: false }), xs + bayW * (i + 0.5), glassY, z));
           if (i > 0) g.add(mullion(xs + bayW * i, z));
+        }
+      }
+      // Fill a span [xs, xe], rendering any portion inside a `solid` range as an opaque
+      // infill panel (no glass) and the rest as glass bays.
+      function fillSpan(xs, xe) {
+        if (xe - xs < 0.02) return;
+        let segs = [[xs, xe, 'glass']];
+        for (const s of solid) {
+          segs = segs.flatMap(([a, b, kind]) => {
+            if (kind !== 'glass' || s.x1 <= a || s.x0 >= b) return [[a, b, kind]];
+            const out = [];
+            if (a < s.x0) out.push([a, s.x0, 'glass']);
+            out.push([Math.max(a, s.x0), Math.min(b, s.x1), 'solid']);
+            if (b > s.x1) out.push([s.x1, b, 'glass']);
+            return out;
+          });
+        }
+        for (const [a, b, kind] of segs) {
+          if (b - a < 0.02) continue;
+          if (kind === 'solid') {
+            g.add(at(box(b - a, glassH, fd, mat.wall, { cast: false }), (a + b) / 2, glassY, z));
+          } else glazeBays(a, b);
         }
       }
       // A glazed door leaf + transom + pull handle, centred at cx.
@@ -507,13 +513,13 @@
       let cursor = leftEnd;
       for (const d of doors.slice().sort((a, b) => a.cx - b.cx)) {
         const dLeft = d.cx - d.width / 2, dRight = d.cx + d.width / 2;
-        glazeSpan(cursor, dLeft);
+        fillSpan(cursor, dLeft);
         if (Math.abs(dLeft - leftEnd) > 0.01) g.add(mullion(dLeft, z));
         if (Math.abs(dRight - rightEnd) > 0.01) g.add(mullion(dRight, z));
         addDoor(d.cx, d.width, d.handleSide);
         cursor = dRight;
       }
-      glazeSpan(cursor, rightEnd);
+      fillSpan(cursor, rightEnd);
 
       root.add(g);
       return g;
@@ -595,64 +601,6 @@
         c.rotation.y = sx * Math.PI / 2;
         g.add(c);
       }
-      root.add(g);
-      return g;
-    }
-
-    // -----------------------------------------------------------------------
-    // Freestanding media wall — display + CIENA branding (a furniture feature,
-    // not architecture, so removing the rear wall leaves nothing floating).
-    // -----------------------------------------------------------------------
-    function makeLogoTexture() {
-      const cv = document.createElement('canvas');
-      cv.width = 1024; cv.height = 256;
-      const ctx = cv.getContext('2d');
-      ctx.clearRect(0, 0, cv.width, cv.height);
-      ctx.fillStyle = CONFIG.cienaRed;
-      ctx.font = '700 170px "Segoe UI", Arial, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('CIENA', cv.width / 2, cv.height / 2 + 6);
-      const tex = new THREE.CanvasTexture(cv);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      tex.anisotropy = 8;
-      return tex;
-    }
-
-    function buildMediaWall() {
-      const g = new THREE.Group(); g.name = 'MediaWall';
-      // A freestanding feature panel standing on the floor at the room's back edge,
-      // centred on the long axis. It faces the room (-Z).
-      const panelW = 12 * FT, panelH = 7.6 * FT, panelT = 5 * IN;
-      const cz = D - panelT / 2 - 2 * IN;                    // just inside the room
-      const front = cz - panelT / 2;                         // room-facing face
-      const panelMat = new THREE.MeshStandardMaterial({ color: 0x1b2026, roughness: 0.55, metalness: 0.25 });
-      g.add(at(box(panelW, panelH, panelT, panelMat), 0, panelH / 2, cz));
-
-      // Display: bezel + an emissive panel whose face is a live canvas texture so the
-      // monitor can play the Ciena / Optical "stories" driven from the iPad.
-      const scW = 8 * FT, scH = 4.6 * FT, scY = panelH * 0.46;
-      g.add(at(box(scW + 4 * IN, scH + 4 * IN, 1 * IN, mat.frame), 0, scY, front - 0.6 * IN));
-      const screenMat = new THREE.MeshStandardMaterial({
-        color: 0xffffff, roughness: 0.3, metalness: 0.0,
-        map: story.texture, emissive: 0xffffff, emissiveMap: story.texture, emissiveIntensity: 0.85,
-      });
-      // A plane facing the room (-Z) — like the logo — so the texture isn't mirrored.
-      const screen = new THREE.Mesh(new THREE.PlaneGeometry(scW, scH), screenMat);
-      screen.position.set(0, scY, front - 1.0 * IN);
-      screen.rotation.y = Math.PI;
-      g.add(screen);
-
-      // CIENA logo, centred above the display.
-      const logoMat = new THREE.MeshBasicMaterial({ map: makeLogoTexture(), transparent: true });
-      const logoW = 5.5 * FT;
-      const logo = new THREE.Mesh(new THREE.PlaneGeometry(logoW, logoW / 4), logoMat);
-      logo.position.set(0, scY + scH / 2 + 0.85 * FT, front - 0.8 * IN);
-      logo.rotation.y = Math.PI;                             // face into the room (-Z)
-      g.add(logo);
-
-      // Brand-blue accent bar near the base of the panel.
-      g.add(at(box(panelW, 4 * IN, 0.5 * IN, mat.brand), 0, 0.55 * FT, front - 0.5 * IN));
       root.add(g);
       return g;
     }
@@ -1030,158 +978,6 @@
       }
     }
 
-    // -----------------------------------------------------------------------
-    // Monitor "stories" — a live canvas texture on the media-wall screen that
-    // plays one of two looping branded animations (or sits on idle branding).
-    // -----------------------------------------------------------------------
-    const story = (() => {
-      const cv = document.createElement('canvas');
-      cv.width = 1024; cv.height = 576;
-      const ctx = cv.getContext('2d');
-      const texture = new THREE.CanvasTexture(cv);
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.anisotropy = 8;
-      const W = cv.width, Hh = cv.height;
-
-      let active = null;      // null | 'ciena' | 'optical'
-      let startT = 0;
-      let idleDrawn = false;
-
-      function bg(a, b) {
-        const grd = ctx.createLinearGradient(0, 0, 0, Hh);
-        grd.addColorStop(0, a); grd.addColorStop(1, b);
-        ctx.fillStyle = grd; ctx.fillRect(0, 0, W, Hh);
-      }
-      // A soft radial glow blob.
-      function glow(x, y, r, color, alpha) {
-        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-        g.addColorStop(0, color);
-        g.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.globalAlpha = alpha; ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-        ctx.globalAlpha = 1;
-      }
-
-      // ----- Idle: static Ciena branding -----
-      function drawIdle() {
-        bg('#0c1622', '#070b10');
-        glow(W / 2, Hh * 0.42, 360, 'rgba(40,90,150,0.25)', 1);
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#e4002b';
-        ctx.font = '700 132px "Segoe UI", Arial, sans-serif';
-        ctx.fillText('CIENA', W / 2, Hh * 0.44);
-        ctx.fillStyle = '#9fb3c6';
-        ctx.font = '400 30px "Segoe UI", Arial, sans-serif';
-        ctx.fillText('EXECUTIVE BRIEFING CENTER', W / 2, Hh * 0.62);
-      }
-
-      // ----- Ciena story: an adaptive-network graph lighting up -----
-      const nodes = [
-        [0.16, 0.30], [0.30, 0.58], [0.27, 0.18], [0.46, 0.40], [0.62, 0.22],
-        [0.70, 0.56], [0.85, 0.34], [0.52, 0.70], [0.40, 0.44], [0.78, 0.74],
-      ];
-      const links = [[0, 2], [0, 1], [1, 8], [8, 3], [2, 3], [3, 4], [4, 5],
-                     [5, 6], [4, 6], [3, 7], [7, 5], [1, 7], [5, 9], [7, 9]];
-      function drawCiena(t) {
-        bg('#0a1420', '#04070c');
-        const px = (f) => f * W, py = (f) => f * Hh;
-        // Links
-        ctx.lineWidth = 2;
-        for (const [a, b] of links) {
-          ctx.strokeStyle = 'rgba(90,150,220,0.22)';
-          ctx.beginPath();
-          ctx.moveTo(px(nodes[a][0]), py(nodes[a][1]));
-          ctx.lineTo(px(nodes[b][0]), py(nodes[b][1]));
-          ctx.stroke();
-        }
-        // Pulses travelling along links
-        links.forEach(([a, b], i) => {
-          const p = ((t * 0.35 + i * 0.13) % 1);
-          const x = px(nodes[a][0] + (nodes[b][0] - nodes[a][0]) * p);
-          const y = py(nodes[a][1] + (nodes[b][1] - nodes[a][1]) * p);
-          glow(x, y, 26, 'rgba(120,190,255,0.9)', 0.9);
-        });
-        // Nodes, brightening in sequence
-        nodes.forEach(([nx, ny], i) => {
-          const b = 0.5 + 0.5 * Math.sin(t * 2 + i * 0.8);
-          const x = px(nx), y = py(ny);
-          const accent = (i % 4 === 0);
-          glow(x, y, 34, accent ? 'rgba(228,0,43,0.85)' : 'rgba(80,150,230,0.8)', 0.4 + 0.5 * b);
-          ctx.fillStyle = accent ? '#ff5577' : '#cfe6ff';
-          ctx.beginPath(); ctx.arc(x, y, 7 + 3 * b, 0, Math.PI * 2); ctx.fill();
-        });
-        // Title with a left-to-right reveal wipe over the first ~1.4s
-        const rev = Math.min(1, t / 1.4);
-        ctx.save();
-        ctx.beginPath(); ctx.rect(0, Hh * 0.70, W * rev, Hh * 0.30); ctx.clip();
-        const grd = ctx.createLinearGradient(0, Hh * 0.8, 0, Hh);
-        grd.addColorStop(0, 'rgba(6,10,16,0)'); grd.addColorStop(0.4, 'rgba(6,10,16,0.85)');
-        ctx.fillStyle = grd; ctx.fillRect(0, Hh * 0.70, W, Hh * 0.30);
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#e4002b';
-        ctx.font = '700 70px "Segoe UI", Arial, sans-serif';
-        ctx.fillText('CIENA', W / 2, Hh * 0.84);
-        ctx.fillStyle = '#cfe0ee';
-        ctx.font = '600 24px "Segoe UI", Arial, sans-serif';
-        ctx.fillText('THE ADAPTIVE NETWORK', W / 2, Hh * 0.93);
-        ctx.restore();
-      }
-
-      // ----- Optical story: light pulses down fibres + a wavelength spectrum -----
-      const fibreYs = [0.16, 0.26, 0.36, 0.46];
-      const hues = [180, 150, 280, 320];
-      function drawOptical(t) {
-        bg('#03101a', '#01060b');
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        // Fibres
-        fibreYs.forEach((fy, i) => {
-          const y = fy * Hh;
-          ctx.strokeStyle = `hsla(${hues[i]},80%,60%,0.18)`;
-          ctx.lineWidth = 2;
-          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-          // 3 pulses per fibre, varying speed
-          const speed = 0.18 + i * 0.05;
-          for (let p = 0; p < 3; p++) {
-            const x = (((t * speed + p / 3 + i * 0.11) % 1)) * (W + 120) - 60;
-            glow(x, y, 30, `hsla(${hues[i]},90%,65%,0.95)`, 0.9);
-          }
-        });
-        // Wavelength spectrum analyser along the bottom
-        const bars = 56, baseY = Hh * 0.92, maxH = Hh * 0.26;
-        const bw = W / bars;
-        for (let i = 0; i < bars; i++) {
-          const n = (Math.sin(t * 2.2 + i * 0.45) * 0.5 + 0.5) *
-                    (Math.sin(t * 0.9 + i * 0.2) * 0.3 + 0.7);
-          const h = 6 + n * maxH;
-          const hue = 200 + (i / bars) * 160;  // spectrum sweep
-          ctx.fillStyle = `hsla(${hue},85%,60%,0.9)`;
-          ctx.fillRect(i * bw + 2, baseY - h, bw - 3, h);
-        }
-        // Title
-        glow(W / 2, Hh * 0.62, 280, 'rgba(20,120,150,0.3)', 1);
-        ctx.fillStyle = '#56e0ff';
-        ctx.font = '700 76px "Segoe UI", Arial, sans-serif';
-        ctx.fillText('OPTICAL', W / 2, Hh * 0.60);
-        ctx.fillStyle = '#b8eeff';
-        ctx.font = '600 26px "Segoe UI", Arial, sans-serif';
-        ctx.fillText('WAVELOGIC · COHERENT OPTICS', W / 2, Hh * 0.70);
-      }
-
-      // Toggle: tapping the active story stops it (back to idle).
-      function play(name, now) {
-        active = (active === name) ? null : name;
-        startT = now;
-        idleDrawn = false;
-        return active;
-      }
-      function update(now) {
-        if (active === 'ciena')        { drawCiena(now - startT);   texture.needsUpdate = true; }
-        else if (active === 'optical') { drawOptical(now - startT); texture.needsUpdate = true; }
-        else if (!idleDrawn)           { drawIdle(); idleDrawn = true; texture.needsUpdate = true; }
-      }
-      drawIdle();  // paint something before the first frame
-      return { texture, play, update, current: () => active };
-    })();
 
     // -----------------------------------------------------------------------
     // iPad control terminal on the table — clicking it opens the menu overlay.
@@ -1248,22 +1044,24 @@
     // -----------------------------------------------------------------------
     buildFloors();
     buildCeilings();
+    const labDoorCx = CONFIG.labLength / 2 - (3 * FT) / 2;   // lab door centre, across the hall
     const nearWall = buildGlassWall(0, {
       name: 'NearGlassWall',
-      doors: [   // a door tucked against each far end of the conference-room wall
+      doors: [   // left door at the far end; right door aligned with the lab door across the hall
         { cx: -L / 2 + CONFIG.frameDepth + CONFIG.doorWidth / 2, width: CONFIG.doorWidth, handleSide:  1 },
-        { cx:  L / 2 - CONFIG.frameDepth - CONFIG.doorWidth / 2, width: CONFIG.doorWidth, handleSide: -1 },
+        { cx: labDoorCx, width: CONFIG.doorWidth, handleSide: -1 },
       ],
+      // From the right door's edge to the right corner is an opaque infill panel (no glass).
+      solid: [ { x0: labDoorCx + CONFIG.doorWidth / 2, x1: L / 2 } ],
     });
     // Lab glass wall: a single 3 ft door on the right side of the lab frontage
     // (its right edge meets the lab's right-hand wall at x = +labLength/2).
     const farWall = buildGlassWall(-W, {
       name: 'FarGlassWall',
-      doors: [ { cx: CONFIG.labLength / 2 - (3 * FT) / 2, width: 3 * FT, handleSide: -1 } ],
+      doors: [ { cx: labDoorCx, width: 3 * FT, handleSide: -1 } ],
     });
     buildTable();
     placeChairs();
-    buildMediaWall();
     buildLab();
     buildRightRoom();
     buildCeilingLights();
@@ -1371,8 +1169,6 @@
 
     // ----- Overlay wiring -----
     const overlay = document.getElementById('ipad-overlay');
-    const cienaTile = overlay.querySelector('[data-action="ciena-story"]');
-    const opticalTile = overlay.querySelector('[data-action="optical-story"]');
     const labTile = overlay.querySelector('[data-action="lab-glass"]');
     const demoTile = overlay.querySelector('[data-action="demo-mode"]');
     const glassFrosted = { near: false, far: false };
@@ -1389,11 +1185,6 @@
     function setTileState(tile, on, text) {
       tile.classList.toggle('active', on);
       tile.querySelector('.state').textContent = text;
-    }
-    function refreshStoryTiles() {
-      const a = story.current();
-      setTileState(cienaTile,   a === 'ciena',   a === 'ciena'   ? 'Playing' : 'Off');
-      setTileState(opticalTile, a === 'optical', a === 'optical' ? 'Playing' : 'Off');
     }
     // Demo Mode: frost the lab wall, kill the room/hall lights, run the laser show.
     function setDemoMode(on) {
@@ -1414,12 +1205,6 @@
         glassFrosted.far = !glassFrosted.far;
         setGlassFrosted(farWall.userData.glassMat, glassFrosted.far);
         setTileState(tile, glassFrosted.far, glassFrosted.far ? 'Frosted' : 'Clear');
-      } else if (action === 'ciena-story') {
-        story.play('ciena', clock.getElapsedTime());
-        refreshStoryTiles();
-      } else if (action === 'optical-story') {
-        story.play('optical', clock.getElapsedTime());
-        refreshStoryTiles();
       } else if (action === 'demo-mode') {
         setDemoMode(!demoOn);
       }
@@ -1451,7 +1236,6 @@
       const now = clock.getElapsedTime();
       controls.update();
       updateGlassTweens(now);
-      story.update(now);
       laser.update(now);
       // Idle breathing glow on the iPad screen (a touch brighter on hover).
       if (ipadFaceMat) {
@@ -1468,7 +1252,7 @@
 
     // Expose for debugging / tweaking from the console.
     window.EBC = { scene, camera, renderer, controls, CONFIG, mat, root, THREE,
-                   nearWall, farWall, ipadGroup, story, setGlassFrosted, openOverlay,
+                   nearWall, farWall, ipadGroup, setGlassFrosted, openOverlay,
                    laser, setRoomLightsOn, setDemoMode };
   </script>
 </body>
