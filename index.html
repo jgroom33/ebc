@@ -257,6 +257,9 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
     import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
+    import { Line2 } from 'three/addons/lines/Line2.js';
+    import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+    import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 
     // -----------------------------------------------------------------------
     // Units & configuration  (internal units = metres; defaults given in feet)
@@ -655,18 +658,95 @@
     // Lab room — across the hallway, centred on the conference room. Its front
     // is the existing far glass wall (Z = -W); it extends back to Z = -W - labW.
     // -----------------------------------------------------------------------
-    // A 19" equipment rack (19" internal mounting + ~1" of frame each side →
-    // ~21" external): dark cabinet with a column of emissive indicators on the
-    // face that points toward the glass (+Z), so they read from the hall.
+    // Baked EBC "split" front-row layout (A1–A10), generated from the inventory CSVs
+    // by tools/gen-rack-layout.mjs — run `node tools/gen-rack-layout.mjs` to refresh.
+    /* LAB-RACKS-START */
+    const LAB_RACKS = {
+  racks: {
+    A1: {"row":"front","order":1,"devices":[]},
+    A2: {"row":"front","order":2,"devices":[{"name":"Canyon-FMT","ru":8,"h":1,"color":"#A78BFA","state":"planned"},{"name":"Canyon","ru":9,"h":13,"color":"#A78BFA","state":"planned"},{"name":"WS-2P","ru":34,"h":1,"color":"#00BBF9","state":"deployed"},{"name":"WaveServer-West","ru":36,"h":1,"color":"#00BBF9","state":"planned"},{"name":"WaveServer-West-2","ru":38,"h":1,"color":"#00BBF9","state":"planned"}]},
+    A3: {"row":"front","order":3,"devices":[{"name":"Breeze","ru":9,"h":2,"color":"#A78BFA","state":"planned"},{"name":"Wind","ru":20,"h":2,"color":"#A78BFA","state":"planned"}]},
+    A4: {"row":"front","order":4,"devices":[{"name":"Mountain","ru":7,"h":7,"color":"#A78BFA","state":"planned"},{"name":"Peak","ru":15,"h":7,"color":"#A78BFA","state":"planned"},{"name":"WS-1P","ru":34,"h":1,"color":"#00BBF9","state":"deployed"},{"name":"WaveServer-East","ru":36,"h":1,"color":"#00BBF9","state":"planned"},{"name":"WaveServer-East-2","ru":38,"h":1,"color":"#00BBF9","state":"planned"}]},
+    A5: {"row":"front","order":5,"devices":[{"name":"ELS-2-T-1","ru":9,"h":2,"color":"#A78BFA","state":"planned"},{"name":"ELS-1-T-1","ru":17,"h":2,"color":"#A78BFA","state":"deployed"},{"name":"5130-1","ru":33,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5171-1","ru":34,"h":2,"color":"#60A5FA","state":"deployed"},{"name":"5164-5","ru":36,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5164-6","ru":37,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5164-7","ru":38,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5164-8","ru":39,"h":1,"color":"#60A5FA","state":"deployed"}]},
+    A6: {"row":"front","order":6,"devices":[{"name":"ELS-2-T-2","ru":9,"h":2,"color":"#A78BFA","state":"planned"},{"name":"ELS-1-T-2","ru":17,"h":2,"color":"#A78BFA","state":"deployed"},{"name":"5130-2","ru":33,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5171-2","ru":34,"h":2,"color":"#60A5FA","state":"deployed"},{"name":"5164-1","ru":36,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5164-2","ru":37,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5164-3","ru":38,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5164-4","ru":39,"h":1,"color":"#60A5FA","state":"deployed"}]},
+    A7: {"row":"front","order":7,"devices":[{"name":"Wave-OMC","ru":7,"h":1,"color":"#A78BFA","state":"planned"},{"name":"Wave","ru":8,"h":2,"color":"#A78BFA","state":"planned"},{"name":"Atlantic","ru":16,"h":4,"color":"#A78BFA","state":"planned"},{"name":"ATL-OMC-1","ru":20,"h":1,"color":"#A78BFA","state":"planned"},{"name":"ATL-OMC-2","ru":21,"h":1,"color":"#A78BFA","state":"planned"},{"name":"8192-1","ru":29,"h":2,"color":"#60A5FA","state":"planned"},{"name":"8114-1","ru":31,"h":2,"color":"#A0AEC0","state":"deployed"},{"name":"5166-1","ru":35,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5170-4","ru":36,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5170-3","ru":37,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5170-2","ru":38,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5170-1","ru":39,"h":1,"color":"#60A5FA","state":"deployed"}]},
+    A8: {"row":"front","order":8,"devices":[{"name":"Tide","ru":18,"h":2,"color":"#A78BFA","state":"planned"},{"name":"Tide-OMC","ru":20,"h":1,"color":"#A78BFA","state":"planned"},{"name":"8192-2","ru":29,"h":2,"color":"#60A5FA","state":"planned"},{"name":"8110-1","ru":31,"h":2,"color":"#60A5FA","state":"deployed"},{"name":"8110-3","ru":33,"h":2,"color":"#60A5FA","state":"deployed"},{"name":"5166-2","ru":35,"h":1,"color":"#60A5FA","state":"deployed"}]},
+    A9: {"row":"front","order":9,"devices":[{"name":"PAC-OMC-2","ru":5,"h":1,"color":"#A78BFA","state":"planned"},{"name":"PAC-OMC-1","ru":6,"h":1,"color":"#A78BFA","state":"planned"},{"name":"Pacific","ru":7,"h":4,"color":"#A78BFA","state":"planned"},{"name":"Arctic","ru":16,"h":4,"color":"#A78BFA","state":"planned"},{"name":"ARC-OMC-1","ru":20,"h":1,"color":"#A78BFA","state":"planned"},{"name":"ARC-OMC-2","ru":21,"h":1,"color":"#A78BFA","state":"planned"},{"name":"8192-3","ru":29,"h":2,"color":"#60A5FA","state":"planned"},{"name":"8112-2","ru":31,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"8112-1","ru":32,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"8110-4","ru":33,"h":2,"color":"#60A5FA","state":"deployed"},{"name":"8110-2","ru":35,"h":2,"color":"#60A5FA","state":"deployed"}]},
+    A10: {"row":"front","order":10,"devices":[{"name":"3926-TDM-2","ru":15,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3926-TDM-1","ru":16,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3926-Combo-2","ru":17,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3926-Combo-1","ru":18,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3928-62","ru":32,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3928-61","ru":33,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3984-4","ru":34,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3984-3","ru":35,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3984-2","ru":36,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3984-1","ru":37,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3926v2-2","ru":38,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3926v2-1","ru":39,"h":1,"color":"#60A5FA","state":"deployed"}]},
+    B2: {"row":"back","order":2,"devices":[{"name":"c7000-1","ru":1,"h":1,"color":"#A0AEC0","state":"deployed"},{"name":"c7000-2","ru":2,"h":1,"color":"#A0AEC0","state":"deployed"},{"name":"c7000-3","ru":3,"h":1,"color":"#A0AEC0","state":"deployed"},{"name":"c7000-4","ru":4,"h":1,"color":"#A0AEC0","state":"deployed"},{"name":"c7000-5","ru":5,"h":1,"color":"#A0AEC0","state":"deployed"},{"name":"c7000-6","ru":6,"h":1,"color":"#A0AEC0","state":"deployed"},{"name":"c7000-7","ru":7,"h":1,"color":"#A0AEC0","state":"deployed"},{"name":"c7000-8","ru":8,"h":1,"color":"#A0AEC0","state":"deployed"},{"name":"dl380-2","ru":13,"h":2,"color":"#00F5D4","state":"deployed"},{"name":"dl380-1","ru":15,"h":2,"color":"#00F5D4","state":"deployed"},{"name":"r640-4","ru":18,"h":1,"color":"#00F5D4","state":"deployed"},{"name":"r640-3","ru":19,"h":1,"color":"#00F5D4","state":"deployed"},{"name":"r640-2","ru":20,"h":1,"color":"#00F5D4","state":"deployed"},{"name":"r640-1","ru":21,"h":1,"color":"#00F5D4","state":"deployed"},{"name":"r660-1","ru":33,"h":1,"color":"#00F5D4","state":"deployed"},{"name":"r660-2","ru":34,"h":1,"color":"#00F5D4","state":"deployed"},{"name":"r660-3","ru":35,"h":1,"color":"#00F5D4","state":"deployed"}]},
+    B3: {"row":"back","order":3,"devices":[]},
+    B4: {"row":"back","order":4,"devices":[]},
+    B5: {"row":"back","order":5,"devices":[{"name":"3984-14","ru":9,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3984-13","ru":10,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3984-12","ru":11,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3984-11","ru":12,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3984-10","ru":13,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3984-9","ru":14,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3984-8","ru":15,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3984-7","ru":16,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3984-6","ru":17,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3984-5","ru":18,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"calient","ru":19,"h":8,"color":"#A0AEC0","state":"deployed"},{"name":"3928-1","ru":34,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3928-63","ru":37,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"3928-64","ru":38,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5142-61","ru":39,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5142-62","ru":40,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5142-63","ru":41,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5142-64","ru":42,"h":1,"color":"#60A5FA","state":"deployed"}]},
+    B6: {"row":"back","order":6,"devices":[{"name":"calient-2","ru":19,"h":8,"color":"#A0AEC0","state":"deployed"},{"name":"5144-1","ru":36,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5144-2","ru":37,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5164dd-1","ru":38,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5162-1","ru":39,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5162-2","ru":40,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5162-3","ru":41,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5162-4","ru":42,"h":1,"color":"#60A5FA","state":"deployed"}]},
+    B7: {"row":"back","order":7,"devices":[{"name":"Exfo-1","ru":24,"h":4,"color":"#A0AEC0","state":"deployed"},{"name":"JNP7100-48L-1","ru":28,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5170-81","ru":29,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5170-82","ru":30,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5170-8","ru":31,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5170-7","ru":32,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5170-6","ru":33,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5170-5","ru":34,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5171-3","ru":35,"h":2,"color":"#60A5FA","state":"deployed"},{"name":"5171-4","ru":37,"h":2,"color":"#60A5FA","state":"deployed"},{"name":"5171-81","ru":39,"h":2,"color":"#60A5FA","state":"deployed"},{"name":"5171-82","ru":41,"h":2,"color":"#60A5FA","state":"deployed"}]},
+    B8: {"row":"back","order":8,"devices":[]}
+  },
+  zones: [{"rackStart":"A1","rackEnd":"A1","label":"Outdoor","ru":43,"h":3},{"rackStart":"A1","rackEnd":"A1","label":"Outdoor Units","ru":33,"h":12},{"rackStart":"A5","rackEnd":"A6","label":"ELS","ru":24,"h":3},{"rackStart":"A10","rackEnd":"A10","label":"TDM","ru":24,"h":3},{"rackStart":"A7","rackEnd":"A9","label":"RLS","ru":24,"h":3},{"rackStart":"A2","rackEnd":"A4","label":"6500","ru":24,"h":3},{"rackStart":"A10","rackEnd":"A10","label":"NID Access","ru":43,"h":3},{"rackStart":"A2","rackEnd":"A4","label":"Datacenter Interconnect","ru":43,"h":3},{"rackStart":"A7","rackEnd":"A9","label":"Converged Metro","ru":43,"h":3},{"rackStart":"A5","rackEnd":"A6","label":"Aggregation","ru":43,"h":3}],
+  fibers: [{"a":"ELS-1-T-1","b":"ELS-1-T-2","color":"#0284C7","dashed":true,"label":""},{"a":"ELS-2-T-1","b":"ELS-2-T-2","color":"#0284C7","dashed":true,"label":""},{"a":"WaveServer-West","b":"WaveServer-East","color":"#0891B2","dashed":false,"label":"(800G)"},{"a":"WaveServer-West-2","b":"WaveServer-East-2","color":"#38BDF8","dashed":false,"label":"(800G)"},{"a":"WS-2P","b":"WS-1P","color":"#0EA5E9","dashed":false,"label":"(400G)"}]
+};
+    /* LAB-RACKS-END */
+
+    // A 19" equipment rack: 45U of mounting space (19" internal + ~1" frame each side
+    // → ~21" external). Devices are placed by RU, RU 1 at the bottom, coloured by type.
     const RACK_W = 21 * IN;
-    function makeRack() {
+    const U_M = 1.75 * IN;                 // one rack unit
+    const RACK_PLINTH = 1.5 * IN;          // frame below RU 1
+    const RACK_D = 2.4 * FT;
+    const RACK_H = RACK_PLINTH + 45 * U_M + 1.5 * IN;
+    const DEV_FRONT = RACK_D / 2 + 0.3 * IN;   // device-face offset from rack centre (+Z)
+    const fiberMats = [];                      // fat-line materials (need resolution on resize)
+
+    // Cache one material per (colour, state). BOTH states are solid/opaque so every
+    // device is visible; deployed glows brighter, planned is dimmer and gets an amber
+    // outline (matching the SVG's amber "planned" style).
+    const devMatCache = new Map();
+    function devMaterial(hex, state) {
+      const key = hex + '|' + state;
+      let m = devMatCache.get(key);
+      if (!m) {
+        const col = new THREE.Color(hex);
+        m = new THREE.MeshStandardMaterial({
+          color: col, emissive: col,
+          emissiveIntensity: state === 'deployed' ? 0.34 : 0.16,
+          roughness: state === 'deployed' ? 0.45 : 0.6, metalness: 0.1,
+        });
+        devMatCache.set(key, m);
+      }
+      return m;
+    }
+    const plannedEdgeMat = new THREE.LineBasicMaterial({ color: 0xf6a623 });  // amber = planned
+
+    // A transparent-background canvas-text label plane (rack IDs, zones, fiber tags).
+    function makeLabelPlane(text, wM, hM, { color = '#eaf1f8', bg = null, size = 64, bold = true } = {}) {
+      const cv = document.createElement('canvas');
+      cv.width = 512; cv.height = Math.max(64, Math.round(512 * hM / wM));
+      const ctx = cv.getContext('2d');
+      if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, cv.width, cv.height); }
+      ctx.fillStyle = color;
+      ctx.font = `${bold ? '700 ' : ''}${size}px "Segoe UI", Arial, sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(text, cv.width / 2, cv.height / 2 + 2);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+      const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
+      return new THREE.Mesh(new THREE.PlaneGeometry(wM, hM), mat);
+    }
+
+    // One rack: dark cabinet + a coloured panel per device at its RU position.
+    function makeRack(devices) {
       const g = new THREE.Group(); g.name = 'Rack';
-      const w = RACK_W, d = 2.4 * FT, h = 6.6 * FT;
-      g.add(at(box(w, h, d, mat.rack), 0, h / 2, 0));
-      const ledMat = new THREE.MeshStandardMaterial({ color: 0x39ffd0, emissive: 0x39ffd0,
-        emissiveIntensity: 1.8, roughness: 0.5 });
-      for (let i = 0; i < 7; i++) {
-        g.add(at(box(w * 0.66, 0.7 * IN, 0.4 * IN, ledMat), 0, h * 0.22 + i * (h * 0.52 / 6), d / 2 + 0.3 * IN));
+      g.add(at(box(RACK_W, RACK_H, RACK_D, mat.rack), 0, RACK_H / 2, 0));
+      const devW = 19 * IN;
+      for (const dv of devices) {
+        const hh = dv.h * U_M - 0.18 * IN;
+        const y = RACK_PLINTH + (dv.ru - 1 + dv.h / 2) * U_M;
+        const panel = at(box(devW, hh, 1.4 * IN, devMaterial(dv.color, dv.state), { cast: false }), 0, y, DEV_FRONT);
+        g.add(panel);
+        if (dv.state !== 'deployed') {            // amber outline marks planned gear
+          const edges = new THREE.LineSegments(new THREE.EdgesGeometry(panel.geometry), plannedEdgeMat);
+          edges.position.copy(panel.position);
+          g.add(edges);
+        }
       }
       return g;
     }
@@ -703,18 +783,70 @@
         g.add(ral);
       }
 
-      // Row of 10 equipment racks across the lab front, 6" apart, with the
-      // rightmost set 5 ft from the right-hand wall; all face the glass so the
-      // indicator lights read from the conference room. The row is set 5 ft back
-      // from the glass (depth).
-      const nRacks = 10, rackW = RACK_W, gap = 6 * IN, rackD = 2.4 * FT;
-      const rackZ = zFront - 5 * FT - rackD / 2;       // 5 ft off the glass
-      const pitch = rackW + gap;                       // centre-to-centre
-      const xRight = xHalf - 5 * FT - rackW / 2;       // rightmost rack centre
-      for (let i = 0; i < nRacks; i++) {
-        const rk = makeRack();
-        rk.position.set(xRight - pitch * i, 0, rackZ); // march left from the right wall
+      // Front display row A1–A10 (5 ft off the glass) + back row B2–B8 (a 3 ft aisle
+      // behind it). Both face the glass (+Z); racks are 6" apart, A10 is 5 ft from the
+      // right wall, and X is keyed by display order so B columns align under A columns.
+      const pitch = RACK_W + 6 * IN;                   // centre-to-centre
+      const xRight = xHalf - 5 * FT - RACK_W / 2;      // display-order 10 (A10) centre
+      const frontRackZ = zFront - 5 * FT - RACK_D / 2;
+      const backRackZ  = frontRackZ - (RACK_D + 3 * FT);
+      const devPos = new Map();                        // deviceName -> front-centre world pos
+      const orderOf = (id) => parseInt(id.slice(1), 10);
+      const xOfOrder = (o) => xRight - pitch * (10 - o);
+
+      for (const [id, rk_] of Object.entries(LAB_RACKS.racks)) {
+        const x = xOfOrder(rk_.order), z = rk_.row === 'back' ? backRackZ : frontRackZ;
+        const rk = makeRack(rk_.devices);
+        rk.position.set(x, 0, z);
         g.add(rk);
+        const lbl = makeLabelPlane(id, 0.26, 0.10, { size: 80 });   // rack ID on top
+        lbl.position.set(x, RACK_H + 0.07, z + RACK_D / 2 - 0.01);
+        g.add(lbl);
+        for (const dv of rk_.devices) {
+          const y = RACK_PLINTH + (dv.ru - 1 + dv.h / 2) * U_M;
+          devPos.set(dv.name, new THREE.Vector3(x, y, z + DEV_FRONT));
+        }
+      }
+
+      // Zone bands: a translucent badge spanning a rack range at an RU anchor.
+      const zoneMat = new THREE.MeshStandardMaterial({ color: 0xc6d0dc, roughness: 0.8,
+        transparent: true, opacity: 0.35, emissive: 0x91a0b3, emissiveIntensity: 0.12 });
+      for (const z of LAB_RACKS.zones) {
+        const xs = xOfOrder(orderOf(z.rackStart)), xe = xOfOrder(orderOf(z.rackEnd));
+        const left = Math.min(xs, xe) - RACK_W / 2, right = Math.max(xs, xe) + RACK_W / 2;
+        const wM = right - left, cx = (left + right) / 2;
+        const hM = z.h * U_M;
+        const y = RACK_PLINTH + (z.ru - 1 + z.h / 2) * U_M;
+        const zz = frontRackZ + RACK_D / 2 + 1 * IN;   // just in front of the device faces
+        g.add(at(box(wM, hM, 0.6 * IN, zoneMat, { cast: false }), cx, y, zz));
+        const lbl = makeLabelPlane(z.label, Math.min(wM * 0.95, 1.6), Math.min(hM * 0.9, 0.16),
+          { color: '#0f172a', size: 48 });
+        lbl.position.set(cx, y, zz + 0.4 * IN);
+        g.add(lbl);
+      }
+
+      // Fiber spans: a glowing patch-cable between two named devices, bowed toward the glass.
+      for (const f of LAB_RACKS.fibers) {
+        const a = devPos.get(f.a), b = devPos.get(f.b);
+        if (!a || !b) continue;
+        const front = 2.5 * IN;                        // float off the rack faces
+        const mid = a.clone().add(b).multiplyScalar(0.5); mid.z += 2.5 * IN;
+        const pts = [
+          a.x, a.y, a.z + front,  mid.x, mid.y, mid.z,  b.x, b.y, b.z + front,
+        ];
+        const geo = new LineGeometry(); geo.setPositions(pts);
+        const lm = new LineMaterial({ color: new THREE.Color(f.color).getHex(), linewidth: 3,
+          dashed: !!f.dashed, dashSize: 0.06, gapSize: 0.04, transparent: true, opacity: 0.95 });
+        lm.resolution.set(window.innerWidth, window.innerHeight);
+        const line = new Line2(geo, lm); line.computeLineDistances();
+        line.renderOrder = 3;
+        g.add(line);
+        fiberMats.push(lm);
+        if (f.label) {
+          const fl = makeLabelPlane(f.label, 0.34, 0.10, { color: '#cdeafe', size: 52 });
+          fl.position.set(mid.x, mid.y + 0.12, mid.z + 0.5 * IN);
+          g.add(fl);
+        }
       }
 
       root.add(g);
@@ -1247,6 +1379,7 @@
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
+      for (const m of fiberMats) m.resolution.set(window.innerWidth, window.innerHeight);
     });
 
     let started = false;
