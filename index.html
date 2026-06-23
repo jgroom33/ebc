@@ -279,6 +279,8 @@
       // Lab room (across the hallway, centred on the conference room) ---------
       labLength:      30 * FT,  // X — centred across from the conference room
       labWidth:       18 * FT,  // Z — depth, back from the shared glass wall
+      // Enclosed room to the right (+X) of the conference room ----------------
+      rightRoomWidth: 14.5 * FT,  // X — its depth (Z) matches the conference room
       // Door opening in the near glass wall --------------------------------
       doorWidth:       3.2 * FT,
       doorHeight:      7 * FT,
@@ -873,6 +875,47 @@
     }
 
     // -----------------------------------------------------------------------
+    // Enclosed room to the right (+X) of the conference room: solid walls, its own
+    // floor / ceiling / lighting, separated from the conference room by a solid wall.
+    // -----------------------------------------------------------------------
+    function buildRightRoom() {
+      const g = new THREE.Group(); g.name = 'RightRoom';
+      const rw = CONFIG.rightRoomWidth;        // X width
+      const xL = L / 2, xR = L / 2 + rw, cx = L / 2 + rw / 2, cz = D / 2;
+      const wt = CONFIG.wallThickness, ft = 2 * IN, ct = 4 * IN;
+
+      // Floor + ceiling, sized to the interior (between the walls) so they don't
+      // overlap/​z-fight with the conference room's floor & ceiling at the shared edge.
+      g.add(at(box(rw - wt, ft, D - wt, mat.floorRoom, { cast: false }), cx, -ft / 2, cz));
+      g.add(at(box(rw - wt, ct, D - wt, mat.ceiling, { cast: false }), cx, H + ct / 2, cz));
+      // Solid walls: divider (shared with the conf room), right, front, back.
+      // The divider carries a door near the back-right corner that connects the
+      // conference room to this room: wall | … | door+transom | … (toward back).
+      const dw = CONFIG.doorWidth, dh = CONFIG.doorHeight;
+      const doorZ1 = D - 1.2 * FT, doorZ0 = doorZ1 - dw, doorZc = (doorZ0 + doorZ1) / 2;
+      g.add(at(box(wt, H, doorZ0, mat.wall), xL, H / 2, doorZ0 / 2));            // front segment
+      g.add(at(box(wt, H, D - doorZ1, mat.wall), xL, H / 2, (doorZ1 + D) / 2));  // back segment
+      g.add(at(box(wt, H - dh, dw, mat.wall), xL, (dh + H) / 2, doorZc));        // transom above door
+      g.add(at(box(1.5 * IN, dh - 2 * IN, dw - 2 * IN, mat.frame), xL, dh / 2, doorZc));   // leaf
+      g.add(at(box(1.2 * IN, 12 * IN, 1.2 * IN, mat.frame),                      // pull handle (room side)
+               xL - wt / 2 - 0.6 * IN, 1.05, doorZc + dw / 2 - 4 * IN));
+      g.add(at(box(wt, H, D, mat.wall), xR, H / 2, cz));
+      g.add(at(box(rw + wt, H, wt, mat.wall), cx, H / 2, 0));
+      g.add(at(box(rw + wt, H, wt, mat.wall), cx, H / 2, D));
+      // Ceiling lights (own material + area light, independent of Demo Mode).
+      const lp = 2 * FT, ly = H - 1 * IN;
+      for (const lx of [cx - rw * 0.22, cx + rw * 0.22]) for (const lz of [D * 0.3, D * 0.7]) {
+        g.add(at(box(lp, 1 * IN, lp, mat.labLens, { cast: false }), lx, ly, lz));
+      }
+      const ral = new THREE.RectAreaLight(0xfff4e0, 4.0, rw * 0.8, D * 0.8);
+      ral.position.set(cx, ly - 1.5 * IN, cz); ral.rotation.x = -Math.PI / 2;
+      g.add(ral);
+
+      root.add(g);
+      return g;
+    }
+
+    // -----------------------------------------------------------------------
     // Ceiling lights (emissive panels + soft area light)
     // -----------------------------------------------------------------------
     const ceilingRectLights = [];     // collected so Demo Mode can switch them off
@@ -1222,6 +1265,7 @@
     placeChairs();
     buildMediaWall();
     buildLab();
+    buildRightRoom();
     buildCeilingLights();
     const sceneLights = buildLighting();
     const ipadGroup = buildIpad();
