@@ -696,21 +696,20 @@
     const DEV_FRONT = RACK_D / 2 + 0.3 * IN;   // device-face offset from rack centre (+Z)
     const fiberMats = [];                      // fat-line materials (need resolution on resize)
 
-    // Cache one material per (colour, state). BOTH states are solid/opaque so every
-    // device is visible; deployed glows brighter, planned is dimmer and gets an amber
-    // outline (matching the SVG's amber "planned" style).
+    // All equipment renders a uniform whitish-gray faceplate (device-type colour is
+    // ignored). Both states are solid/opaque so every device is visible; deployed is a
+    // touch brighter, planned is dimmer and gets an amber outline (see makeRack).
+    const DEV_GRAY = 0xccd2d9;
     const devMatCache = new Map();
     function devMaterial(hex, state) {
-      const key = hex + '|' + state;
-      let m = devMatCache.get(key);
+      let m = devMatCache.get(state);
       if (!m) {
-        const col = new THREE.Color(hex);
         m = new THREE.MeshStandardMaterial({
-          color: col, emissive: col,
-          emissiveIntensity: state === 'deployed' ? 0.34 : 0.16,
-          roughness: state === 'deployed' ? 0.45 : 0.6, metalness: 0.1,
+          color: DEV_GRAY, emissive: DEV_GRAY,
+          emissiveIntensity: state === 'deployed' ? 0.16 : 0.06,
+          roughness: state === 'deployed' ? 0.5 : 0.62, metalness: 0.12,
         });
-        devMatCache.set(key, m);
+        devMatCache.set(state, m);
       }
       return m;
     }
