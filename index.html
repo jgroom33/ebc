@@ -374,6 +374,7 @@
       labLens:   new THREE.MeshStandardMaterial({ color: C.lens, emissive: C.lens, emissiveIntensity: 1.2,
                                                   roughness: 0.6 }),
       rack:      new THREE.MeshStandardMaterial({ color: 0x14171c, roughness: 0.5, metalness: 0.6 }),
+      cableMgr:  new THREE.MeshStandardMaterial({ color: 0x0c0f14, roughness: 0.55, metalness: 0.45 }),
       // Transmissive architectural glass. A low `thickness` keeps it reading as a thin
       // pane: high thickness makes the panes lens the room into a flipped ("mirror")
       // image, which looked like the door had a duplicate of itself.
@@ -793,6 +794,7 @@
       const orderOf = (id) => parseInt(id.slice(1), 10);
       const xOfOrder = (o) => xRight - pitch * (10 - o);
 
+      const rowsInfo = {};                             // row -> { z, orders[] }
       for (const [id, rk_] of Object.entries(LAB_RACKS.racks)) {
         const x = xOfOrder(rk_.order), z = rk_.row === 'back' ? backRackZ : frontRackZ;
         const rk = makeRack(rk_.devices);
@@ -804,6 +806,20 @@
         for (const dv of rk_.devices) {
           const y = RACK_PLINTH + (dv.ru - 1 + dv.h / 2) * U_M;
           devPos.set(dv.name, new THREE.Vector3(x, y, z + DEV_FRONT));
+        }
+        (rowsInfo[rk_.row] ||= { z, orders: [] }).orders.push(rk_.order);
+      }
+
+      // Vertical cable managers fill each 6" inter-rack gap and extend 6" in front of
+      // the rack faces (the gap is the cable-routing channel).
+      const mgrW = 6 * IN - 0.2 * IN, mgrD = RACK_D + 6 * IN;
+      for (const row of Object.values(rowsInfo)) {
+        const orders = row.orders.sort((a, b) => a - b);
+        for (let i = 0; i < orders.length - 1; i++) {
+          if (orders[i + 1] - orders[i] !== 1) continue;             // only between adjacent racks
+          const cx = (xOfOrder(orders[i]) + xOfOrder(orders[i + 1])) / 2;
+          const cz = row.z + 3 * IN;                                 // back flush w/ rack, front +6"
+          g.add(at(box(mgrW, RACK_H, mgrD, mat.cableMgr), cx, RACK_H / 2, cz));
         }
       }
 
