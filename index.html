@@ -1047,12 +1047,17 @@
     const labDoorCx = CONFIG.labLength / 2 - (3 * FT) / 2;   // lab door centre, across the hall
     const nearWall = buildGlassWall(0, {
       name: 'NearGlassWall',
-      doors: [   // left door at the far end; right door aligned with the lab door across the hall
-        { cx: -L / 2 + CONFIG.frameDepth + CONFIG.doorWidth / 2, width: CONFIG.doorWidth, handleSide:  1 },
-        { cx: labDoorCx, width: CONFIG.doorWidth, handleSide: -1 },
+      // Doors symmetric about the centre: the right one aligns with the lab door across the
+      // hall, the left one mirrors it, so each is the SAME distance from its corner.
+      doors: [
+        { cx: -labDoorCx, width: CONFIG.doorWidth, handleSide:  1 },
+        { cx:  labDoorCx, width: CONFIG.doorWidth, handleSide: -1 },
       ],
-      // From the right door's edge to the right corner is an opaque infill panel (no glass).
-      solid: [ { x0: labDoorCx + CONFIG.doorWidth / 2, x1: L / 2 } ],
+      // Equal opaque infill panels from each corner to its door (no glass).
+      solid: [
+        { x0: -L / 2, x1: -labDoorCx - CONFIG.doorWidth / 2 },
+        { x0:  labDoorCx + CONFIG.doorWidth / 2, x1: L / 2 },
+      ],
     });
     // Lab glass wall: a single 3 ft door on the right side of the lab frontage
     // (its right edge meets the lab's right-hand wall at x = +labLength/2).
