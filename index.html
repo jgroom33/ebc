@@ -188,10 +188,10 @@
         <div class="grid">
           <button class="tile wide" data-action="demo-mode">
             <span class="state">Off</span>
-            <span class="icon">🔆</span>
+            <span class="icon">🎬</span>
             <span>
-              <span class="label">Demo Mode</span>
-              <span class="desc">Frost the lab, dim the lights & run the laser show</span>
+              <span class="label">Full Demo</span>
+              <span class="desc">Dim, frost, run the presentation, then spotlight the 6500</span>
             </span>
           </button>
           <button class="tile" data-action="conf-glass">
@@ -1269,8 +1269,8 @@
       fill: sceneLights.fill.intensity,
       exposure: renderer.toneMappingExposure,
     };
-    // Turn the conference-room + hallway fixtures on/off (Demo Mode kills the lights
-    // and drops the ambient to a dim wash so the laser projection reads).
+    // Turn the conference-room + hallway fixtures on/off (Full Demo dims the lights to a
+    // soft wash for the presentation, then Spotlight drops the room to near-black).
     function setRoomLightsOn(on) {
       mat.lens.emissiveIntensity = on ? lightBase.lens : 0.0;
       ceilingRectLights.forEach(r => { r.intensity = on ? r.userData.base : 0.0; });
@@ -1280,58 +1280,6 @@
     }
 
     // -----------------------------------------------------------------------
-    // Laser projection — a small RGB "laser show" that sweeps the lab wall
-    // during Demo Mode: a few additive beams from a hallway projector tracing
-    // Lissajous paths, with a glowing dot where each lands on the wall.
-    // -----------------------------------------------------------------------
-    function makeGlowTexture() {
-      const cv = document.createElement('canvas'); cv.width = cv.height = 128;
-      const ctx = cv.getContext('2d');
-      const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-      g.addColorStop(0, 'rgba(255,255,255,1)');
-      g.addColorStop(0.25, 'rgba(255,255,255,0.85)');
-      g.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 128);
-      const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-      return tex;
-    }
-    const laser = (() => {
-      const group = new THREE.Group(); group.name = 'LaserShow'; group.visible = false;
-      const origin = new THREE.Vector3(L * 0.10, H * 0.62, -W * 0.5);  // projector in the hall
-      const wallZ = -W + 0.05;                                         // just off the lab wall
-      const glowTex = makeGlowTexture();
-      const colors = [0xff2438, 0x29ff5c, 0x2f9bff];
-      const upY = new THREE.Vector3(0, 1, 0), dir = new THREE.Vector3(), target = new THREE.Vector3();
-      const beams = colors.map((color) => {
-        const beamMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5,
-          blending: THREE.AdditiveBlending, depthWrite: false });
-        const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 1, 6), beamMat);
-        beam.castShadow = beam.receiveShadow = false;
-        const dot = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color,
-          blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
-        group.add(beam, dot);
-        return { beam, dot, beamMat };
-      });
-      root.add(group);
-      function update(t) {
-        if (!group.visible) return;
-        beams.forEach((b, i) => {
-          const x = Math.sin(t * 0.8 + i * 2.1) * (L * 0.34);          // Lissajous sweep
-          const y = H * 0.5 + Math.sin(t * 1.27 + i * 1.7) * (H * 0.34);
-          target.set(x, y, wallZ);
-          dir.subVectors(target, origin);
-          const len = dir.length();
-          b.beam.position.copy(origin).addScaledVector(dir, 0.5);      // span origin → wall
-          b.beam.scale.set(1, len, 1);
-          b.beam.quaternion.setFromUnitVectors(upY, dir.normalize());
-          b.dot.position.copy(target);
-          b.dot.scale.setScalar(0.42 + 0.14 * Math.sin(t * 9 + i * 2));
-          b.beamMat.opacity = 0.34 + 0.2 * Math.sin(t * 7 + i);
-        });
-      }
-      function setActive(on) { group.visible = on; }
-      return { update, setActive };
-    })();
 
     // -----------------------------------------------------------------------
     // iPad interaction — raycast clicks (distinguished from orbit drags) open
@@ -1369,6 +1317,7 @@
     const glassFrosted = { near: false, far: false };
     let demoOn = false;
     let spotlightOn = false;
+    let demoStart = 0, demoStep = 0;       // Full Demo choreography clock + step pointer
 
     function openOverlay() {
       overlay.classList.add('open');
@@ -1382,23 +1331,50 @@
       tile.classList.toggle('active', on);
       tile.querySelector('.state').textContent = text;
     }
-    // Demo Mode: frost the lab wall, kill the room/hall lights, run the laser show.
-    function setDemoMode(on) {
-      demoOn = on;
-      if (on && spotlightOn) setSpotlightMode(false);        // mutually exclusive modes
+    // Frost / clear the lab glass (mirrors the "Lab Glass" action) — the frosted pane
+    // doubles as the presentation screen.
+    function frostFar(on) {
       glassFrosted.far = on;
-      setGlassFrosted(farWall.userData.glassMat, on, 0.3);   // dimmer frost so the laser pops
+      setGlassFrosted(farWall.userData.glassMat, on);        // default frost glow → solid white
       setTileState(labTile, on, on ? 'Frosted' : 'Clear');
-      setRoomLightsOn(!on);
-      laser.setActive(on);
-      setTileState(demoTile, on, on ? 'On' : 'Off');
+    }
+    // Full Demo: a timed choreography — dim → frost glass → run the presentation → unfrost →
+    // light up the 6500 → hold a beat → auto-restore. Stages fire from a clock-based driver in
+    // animate() (the scene's established pattern); tapping the tile again aborts and restores.
+    const SLIDE_DUR = 5, PRESO_T0 = 0.7;                     // let the 0.6 s frost settle first
+    const PRESO_END = PRESO_T0 + 3 * SLIDE_DUR;              // 15.7 s — presentation done
+    const SPOT_T = PRESO_END + 0.7;                          // 16.4 s — light up the 6500
+    const RESTORE_T = SPOT_T + 10;                           // 26.4 s — hold the lit 6500 ~10 s, then restore
+    const demoSteps = [
+      { t: 0.0,       fn: () => { setRoomLightsOn(false); frostFar(true);
+                                  presoAuto = false; presoScreen.visible = false; } },
+      { t: PRESO_END, fn: () => { presoScreen.visible = false; frostFar(false); } },
+      { t: SPOT_T,    fn: () => { setSpotlightMode(true); } },   // safe: no demoOn cross-cancel
+      { t: RESTORE_T, fn: () => { setDemoMode(false); } },       // finish + restore
+    ];
+    function setDemoMode(on) {
+      if (on) {
+        if (spotlightOn) setSpotlightMode(false);            // start from a clean state
+        demoOn = true; demoStart = clock.getElapsedTime(); demoStep = 0;
+        presoAuto = false;                                   // the sequencer drives the slides
+        if (presoScreen) presoScreen.visible = false;
+        setTileState(demoTile, true, 'Running');
+      } else {                                               // abort or natural finish → restore
+        demoOn = false; presoAuto = true;
+        if (presoScreen) presoScreen.visible = false;
+        if (spotlightOn) setSpotlightMode(false);            // restore lights/exposure/dev-mats
+        frostFar(false);                                     // ensure the lab glass is clear
+        setRoomLightsOn(true);
+        setTileState(demoTile, false, 'Off');
+      }
     }
     // Spotlight mode: drop the room to near-dark (conf + hall + lab + right room) while the
     // always-on section downlights keep their equipment lit — the lab glass stays CLEAR so
     // the glowing 6500 reads from the conference room.
     function setSpotlightMode(on) {
       spotlightOn = on;
-      if (on && demoOn) setDemoMode(false);                  // mutually exclusive modes
+      // (Mutual exclusion with Full Demo lives in handleAction, so the demo's own terminal
+      //  setSpotlightMode(true) at the finale doesn't cancel the in-progress sequence.)
       setRoomLightsOn(!on);                                  // conference + hallway fixtures
       labAreaLights.forEach(r => { r.intensity = on ? 0.0 : r.userData.base; });
       mat.labLens.emissiveIntensity = on ? 0.0 : lightBase.labLens;
@@ -1434,8 +1410,9 @@
         setGlassFrosted(farWall.userData.glassMat, glassFrosted.far);
         setTileState(tile, glassFrosted.far, glassFrosted.far ? 'Frosted' : 'Clear');
       } else if (action === 'demo-mode') {
-        setDemoMode(!demoOn);
+        setDemoMode(!demoOn);                                 // setDemoMode(true) cancels spotlight
       } else if (action === 'spotlight') {
+        if (demoOn) setDemoMode(false);                       // cancel a running Full Demo first
         setSpotlightMode(!spotlightOn);
       }
     }
@@ -1466,17 +1443,27 @@
       const now = clock.getElapsedTime();
       controls.update();
       updateGlassTweens(now);
-      laser.update(now);
       // Idle breathing glow on the iPad screen (a touch brighter on hover).
       if (ipadFaceMat) {
         ipadFaceMat.emissiveIntensity = (ipadHover ? 1.0 : 0.7) + Math.sin(now * 2) * 0.12;
       }
-      // The lab-glass presentation shows only when that glass is frosted opaque (and not
-      // during the laser demo). Advance slides (~6 s each) while it's visible.
+      // The lab-glass presentation shows when that glass is frosted opaque (outside Full Demo,
+      // which drives the slides itself via presoAuto=false). Advance slides (~6 s each).
       if (presoScreen && presoAuto) presoScreen.visible = glassFrosted.far && !demoOn;
       if (presoAuto && presoScreen && presoScreen.visible && presoSlides.length) {
         const i = Math.floor(now / 6) % presoSlides.length;
         if (i !== presoIndex) { presoIndex = i; presoMat.map = presoSlides[i]; presoMat.needsUpdate = true; }
+      }
+      // Full Demo choreography: fire each timed stage once, and drive the presentation slides
+      // (0→1→2) off demo-relative time so the show always starts on the Welcome slide.
+      if (demoOn) {
+        const e = now - demoStart;
+        while (demoStep < demoSteps.length && e >= demoSteps[demoStep].t) demoSteps[demoStep++].fn();
+        if (e >= PRESO_T0 && e < PRESO_END && presoScreen) {
+          presoScreen.visible = true;
+          const i = Math.min(2, Math.floor((e - PRESO_T0) / SLIDE_DUR));
+          if (i !== presoIndex) { presoIndex = i; presoMat.map = presoSlides[i]; presoMat.needsUpdate = true; }
+        }
       }
       renderer.render(scene, camera);
       if (!started) {
@@ -1490,7 +1477,7 @@
     // Expose for debugging / tweaking from the console.
     window.EBC = { scene, camera, renderer, controls, CONFIG, mat, root, THREE,
                    nearWall, farWall, ipadGroup, setGlassFrosted, openOverlay,
-                   laser, setRoomLightsOn, setDemoMode, setSpotlightMode,
+                   setRoomLightsOn, setDemoMode, setSpotlightMode,
                    presoSet: (i) => { presoAuto = false; presoIndex = i; presoScreen.visible = true;
                      presoMat.map = presoSlides[i]; presoMat.needsUpdate = true; } };
   </script>
