@@ -207,7 +207,15 @@
             <span class="icon">🧪</span>
             <span>
               <span class="label">Lab Glass</span>
-              <span class="desc">Frost the lab glass across the hall</span>
+              <span class="desc">Frost the lab glass &amp; show the presentation</span>
+            </span>
+          </button>
+          <button class="tile" data-action="spotlight">
+            <span class="state">Off</span>
+            <span class="icon">🔦</span>
+            <span>
+              <span class="label">Spotlight</span>
+              <span class="desc">Dim the room &amp; spotlight the 6500 section</span>
             </span>
           </button>
         </div>
@@ -341,6 +349,7 @@
     const C = CONFIG.color;
     const mat = {
       wall:      new THREE.MeshStandardMaterial({ color: C.wall, roughness: 0.92, metalness: 0.0 }),
+      wallInfill: new THREE.MeshStandardMaterial({ color: 0x2c3038, roughness: 0.85, metalness: 0.05 }),
       floorRoom: new THREE.MeshStandardMaterial({ color: C.floorRoom, roughness: 0.95, metalness: 0.0 }),
       floorHall: new THREE.MeshStandardMaterial({ color: C.floorHall, roughness: 0.25, metalness: 0.1 }),
       ceiling:   new THREE.MeshStandardMaterial({ color: C.ceiling, roughness: 0.96, metalness: 0.0 }),
@@ -492,7 +501,7 @@
         for (const [a, b, kind] of segs) {
           if (b - a < 0.02) continue;
           if (kind === 'solid') {
-            g.add(at(box(b - a, glassH, fd, mat.wall, { cast: false }), (a + b) / 2, glassY, z));
+            g.add(at(box(b - a, glassH, fd, mat.wallInfill, { cast: false }), (a + b) / 2, glassY, z));
           } else glazeBays(a, b);
         }
       }
@@ -661,6 +670,7 @@
           emissiveIntensity: state === 'deployed' ? 0.16 : 0.06,
           roughness: state === 'deployed' ? 0.5 : 0.62, metalness: 0.12,
         });
+        m.userData.base = m.emissiveIntensity;   // restore point for Spotlight mode
         devMatCache.set(state, m);
       }
       return m;
@@ -706,6 +716,94 @@
         new THREE.MeshBasicMaterial({ map: tex }));                // opaque (no transparent flag)
     }
 
+    // ---- Lab-wall presentation slides ------------------------------------
+    // Each slide is drawn to a 16:9 canvas and wrapped in a CanvasTexture. The
+    // screen material is OPAQUE/unlit (MeshBasicMaterial) so it shows through the
+    // glass transmission pass and is visible from the conference room.
+    function makeSlideTexture(draw) {
+      const cv = document.createElement('canvas');
+      cv.width = 1280; cv.height = 720;
+      draw(cv.getContext('2d'), cv.width, cv.height);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+      return tex;
+    }
+    const SLIDE_RED = '#e4002b';
+    function slideRR(ctx, x, y, w, h, r) {       // rounded-rect path
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+    function slideBg(ctx, W, H) {
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, '#0c1622'); g.addColorStop(1, '#15263a');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    }
+    const SLIDE_DRAWERS = [
+      // 1 — Welcome
+      (ctx, W, H) => {
+        slideBg(ctx, W, H);
+        ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        ctx.fillStyle = SLIDE_RED; ctx.font = '800 46px "Segoe UI", Arial, sans-serif';
+        ctx.fillText('CIENA', 64, 54);
+        ctx.fillRect(64, 116, 132, 6);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#9fb3c8'; ctx.font = '600 50px "Segoe UI", Arial, sans-serif';
+        ctx.fillText('W E L C O M E', W / 2, H * 0.32);
+        ctx.fillStyle = '#ffffff'; ctx.font = '800 130px "Segoe UI", Arial, sans-serif';
+        ctx.fillText('Carrier Acme', W / 2, H * 0.42);
+        ctx.fillStyle = SLIDE_RED; ctx.fillRect(W / 2 - 220, H * 0.74, 440, 6);
+        ctx.fillStyle = '#9fb3c8'; ctx.font = '500 34px "Segoe UI", Arial, sans-serif';
+        ctx.fillText('Executive Briefing Center', W / 2, H * 0.79);
+      },
+      // 2 — 4-node network diagram
+      (ctx, W, H) => {
+        slideBg(ctx, W, H);
+        ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        ctx.fillStyle = '#ffffff'; ctx.font = '700 48px "Segoe UI", Arial, sans-serif';
+        ctx.fillText('Network Topology', W / 2, 44);
+        ctx.fillStyle = SLIDE_RED; ctx.fillRect(W / 2 - 96, 112, 192, 5);
+        const cx = W / 2, cy = H * 0.58, rx = 340, ry = 165;
+        const nodes = [
+          { x: cx - rx, y: cy - ry, label: 'Site A' },
+          { x: cx + rx, y: cy - ry, label: 'Site B' },
+          { x: cx + rx, y: cy + ry, label: 'Site C' },
+          { x: cx - rx, y: cy + ry, label: 'Site D' },
+        ];
+        ctx.strokeStyle = '#3f7bbf'; ctx.lineWidth = 5;
+        for (const [a, b] of [[0, 1], [1, 2], [2, 3], [3, 0], [0, 2], [1, 3]]) {
+          ctx.beginPath(); ctx.moveTo(nodes[a].x, nodes[a].y); ctx.lineTo(nodes[b].x, nodes[b].y); ctx.stroke();
+        }
+        for (const n of nodes) {
+          ctx.fillStyle = '#16263a'; ctx.strokeStyle = SLIDE_RED; ctx.lineWidth = 5;
+          slideRR(ctx, n.x - 82, n.y - 50, 164, 100, 16); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = '#ffffff'; ctx.font = '700 34px "Segoe UI", Arial, sans-serif';
+          ctx.textBaseline = 'middle'; ctx.fillText(n.label, n.x, n.y);
+          ctx.textBaseline = 'top';
+        }
+        ctx.fillStyle = '#9fb3c8'; ctx.font = '600 26px "Segoe UI", Arial, sans-serif';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('100G', cx, cy - ry); ctx.fillText('100G', cx, cy + ry);
+      },
+      // 3 — Demo time
+      (ctx, W, H) => {
+        slideBg(ctx, W, H);
+        ctx.fillStyle = SLIDE_RED;
+        const tx = W / 2, ty = H * 0.33, s = 58;
+        ctx.beginPath();
+        ctx.moveTo(tx - s * 0.5, ty - s); ctx.lineTo(tx - s * 0.5, ty + s); ctx.lineTo(tx + s, ty);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#ffffff'; ctx.font = '800 148px "Segoe UI", Arial, sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('DEMO TIME', W / 2, H * 0.60);
+        ctx.fillStyle = SLIDE_RED; ctx.fillRect(W / 2 - 200, H * 0.78, 400, 6);
+      },
+    ];
+
     // One rack: dark cabinet + a coloured panel per device at its RU position.
     function makeRack(devices) {
       const g = new THREE.Group(); g.name = 'Rack';
@@ -744,6 +842,20 @@
       // Front bulkhead above the 9 ft glass wall, closing the taller lab to its ceiling.
       g.add(at(box(labL + 2 * wt, labH - H, wt, mat.wall), 0, (H + labH) / 2, zFront + wt / 2));
 
+      // Presentation projected across the lab's GLASS wall, facing the conference room.
+      // It shows only when that glass is FROSTED opaque (the "Lab Glass" control) — the
+      // frosted pane becomes the projection screen, read from across the hall. Slides cycle
+      // in animate(); opaque/unlit so it carries through the near-glass transmission pass.
+      presoSlides = SLIDE_DRAWERS.map(d => makeSlideTexture(d));
+      const scrH = 6.6 * FT, scrW = scrH * 16 / 9;                       // big 16:9, centred
+      const glassMidY = CONFIG.frameDepth + (H - CONFIG.frameDepth) / 2;
+      const scrZ = zFront + CONFIG.glassThickness / 2 + 0.6 * IN;        // just in front of the pane
+      presoMat = new THREE.MeshBasicMaterial({ map: presoSlides[0] });
+      presoScreen = new THREE.Mesh(new THREE.PlaneGeometry(scrW, scrH), presoMat);
+      presoScreen.position.set(0, glassMidY, scrZ);
+      presoScreen.visible = false;                                       // revealed when glass frosts
+      g.add(presoScreen);
+
       // Ceiling light panels (+ a few area lights NOT registered with Demo Mode,
       // so the lab stays lit and back-lights the frosted glass during the demo).
       const lp = 2 * FT, ly = labH - 1 * IN, cols = 4, rows = 2;
@@ -757,6 +869,7 @@
         const ral = new THREE.RectAreaLight(0xeaf2ff, 4.0, labL * 0.5, labW * 0.5);
         ral.position.set(x, ly - 1.5 * IN, cz);
         ral.rotation.x = -Math.PI / 2;
+        ral.userData.base = 4.0; labAreaLights.push(ral);
         g.add(ral);
       }
 
@@ -842,6 +955,28 @@
         g.add(sign);
       }
 
+      // Section accent downlight — an LED bar tucked behind a sign's lower edge, washing
+      // the equipment below. Always on; in Spotlight mode (room dark) it makes the section
+      // glow. Built per-label so more sections can be added with another call.
+      function addSectionDownlight(label) {
+        const z = LAB_RACKS.zones.find(zo => zo.label === label);
+        if (!z) return;
+        const { bottom } = (ALIGNED.has(label) && alignedBand)
+          ? alignedBand
+          : (() => { let b = z.ru, occ = occupiedFor(z.rackStart, z.rackEnd);
+              while (b <= 58 && occ[b]) b++; return { bottom: b }; })();
+        const xs = xOfOrder(orderOf(z.rackStart)), xe = xOfOrder(orderOf(z.rackEnd));
+        const left = Math.min(xs, xe) - RACK_W / 2, right = Math.max(xs, xe) + RACK_W / 2;
+        const cx = (left + right) / 2, sillY = RACK_PLINTH + (bottom - 1) * U_M;
+        const led = new THREE.RectAreaLight(0xeaf2ff, 14.0, (right - left) - 4 * IN, 5 * IN);
+        led.position.set(cx, sillY + 1 * IN, signZ - 4 * IN);   // behind the sign's lower edge
+        led.rotation.x = -Math.PI / 2 + 0.4;                    // face down, raked at the rack faces
+        led.userData.section = label; led.userData.base = led.intensity;
+        sectionDownlights.push(led);
+        g.add(led);
+      }
+      addSectionDownlight('6500');
+
       // Fiber spans: a glowing patch-cable between two named devices, bowed toward the glass.
       for (const f of LAB_RACKS.fibers) {
         const a = devPos.get(f.a), b = devPos.get(f.b);
@@ -905,6 +1040,7 @@
       }
       const ral = new THREE.RectAreaLight(0xfff4e0, 4.0, rw * 0.8, D * 0.8);
       ral.position.set(cx, ly - 1.5 * IN, cz); ral.rotation.x = -Math.PI / 2;
+      ral.userData.base = 4.0; labAreaLights.push(ral);
       g.add(ral);
 
       root.add(g);
@@ -915,6 +1051,8 @@
     // Ceiling lights (emissive panels + soft area light)
     // -----------------------------------------------------------------------
     const ceilingRectLights = [];     // collected so Demo Mode can switch them off
+    const labAreaLights = [];         // lab + right-room area lights (off in Spotlight mode)
+    const sectionDownlights = [];     // section accent LEDs (boosted in Spotlight mode)
     function buildCeilingLights() {
       const g = new THREE.Group(); g.name = 'CeilingLights';
       const cols = CONFIG.lightCols, rows = CONFIG.lightRows;
@@ -1057,6 +1195,7 @@
     }
 
     let ipadFaceMat = null;     // for the idle glow pulse in animate()
+    let presoMat = null, presoScreen = null, presoSlides = [], presoIndex = -1, presoAuto = true;   // lab-glass slideshow
     function buildIpad() {
       const g = new THREE.Group(); g.name = 'iPad';
       const w = 1.05 * FT, h = 0.8 * FT, t = 0.3 * IN;     // a generous, easy-to-spot tablet
@@ -1124,9 +1263,11 @@
     // Remember the lit-room intensities so Demo Mode can dim and restore them.
     const lightBase = {
       lens: mat.lens.emissiveIntensity,
+      labLens: mat.labLens.emissiveIntensity,
       hemi: sceneLights.hemi.intensity,
       sun:  sceneLights.sun.intensity,
       fill: sceneLights.fill.intensity,
+      exposure: renderer.toneMappingExposure,
     };
     // Turn the conference-room + hallway fixtures on/off (Demo Mode kills the lights
     // and drops the ambient to a dim wash so the laser projection reads).
@@ -1224,8 +1365,10 @@
     const overlay = document.getElementById('ipad-overlay');
     const labTile = overlay.querySelector('[data-action="lab-glass"]');
     const demoTile = overlay.querySelector('[data-action="demo-mode"]');
+    const spotTile = overlay.querySelector('[data-action="spotlight"]');
     const glassFrosted = { near: false, far: false };
     let demoOn = false;
+    let spotlightOn = false;
 
     function openOverlay() {
       overlay.classList.add('open');
@@ -1242,12 +1385,44 @@
     // Demo Mode: frost the lab wall, kill the room/hall lights, run the laser show.
     function setDemoMode(on) {
       demoOn = on;
+      if (on && spotlightOn) setSpotlightMode(false);        // mutually exclusive modes
       glassFrosted.far = on;
       setGlassFrosted(farWall.userData.glassMat, on, 0.3);   // dimmer frost so the laser pops
       setTileState(labTile, on, on ? 'Frosted' : 'Clear');
       setRoomLightsOn(!on);
       laser.setActive(on);
       setTileState(demoTile, on, on ? 'On' : 'Off');
+    }
+    // Spotlight mode: drop the room to near-dark (conf + hall + lab + right room) while the
+    // always-on section downlights keep their equipment lit — the lab glass stays CLEAR so
+    // the glowing 6500 reads from the conference room.
+    function setSpotlightMode(on) {
+      spotlightOn = on;
+      if (on && demoOn) setDemoMode(false);                  // mutually exclusive modes
+      setRoomLightsOn(!on);                                  // conference + hallway fixtures
+      labAreaLights.forEach(r => { r.intensity = on ? 0.0 : r.userData.base; });
+      mat.labLens.emissiveIntensity = on ? 0.0 : lightBase.labLens;
+      // Recede the equipment self-glow AND its image-based lighting so unlit sections go
+      // dark; only the downlit 6500 stays bright (direct LED light ignores envMapIntensity).
+      devMatCache.forEach(m => {
+        m.emissiveIntensity = on ? m.userData.base * 0.15 : m.userData.base;
+        m.envMapIntensity   = on ? 0.0 : 1.0;
+      });
+      // Darken the whole image (walls/glass/signs are IBL-lit) and boost the accent LEDs
+      // so the lit section still pops against the near-black scene.
+      renderer.toneMappingExposure = on ? 0.5 : lightBase.exposure;
+      sectionDownlights.forEach(l => { l.intensity = on ? l.userData.base * 2.2 : l.userData.base; });
+      if (on) {                                              // kill the residual ambient
+        sceneLights.hemi.intensity = 0.0;
+        sceneLights.sun.intensity  = 0.0;
+        sceneLights.fill.intensity = 0.0;
+        if (glassFrosted.far) {                              // ensure the lab glass is clear
+          glassFrosted.far = false;
+          setGlassFrosted(farWall.userData.glassMat, false);
+          setTileState(labTile, false, 'Clear');
+        }
+      }
+      setTileState(spotTile, on, on ? 'On' : 'Off');
     }
     function handleAction(action, tile) {
       if (action === 'conf-glass') {
@@ -1260,6 +1435,8 @@
         setTileState(tile, glassFrosted.far, glassFrosted.far ? 'Frosted' : 'Clear');
       } else if (action === 'demo-mode') {
         setDemoMode(!demoOn);
+      } else if (action === 'spotlight') {
+        setSpotlightMode(!spotlightOn);
       }
     }
     overlay.addEventListener('click', (e) => {
@@ -1294,6 +1471,13 @@
       if (ipadFaceMat) {
         ipadFaceMat.emissiveIntensity = (ipadHover ? 1.0 : 0.7) + Math.sin(now * 2) * 0.12;
       }
+      // The lab-glass presentation shows only when that glass is frosted opaque (and not
+      // during the laser demo). Advance slides (~6 s each) while it's visible.
+      if (presoScreen && presoAuto) presoScreen.visible = glassFrosted.far && !demoOn;
+      if (presoAuto && presoScreen && presoScreen.visible && presoSlides.length) {
+        const i = Math.floor(now / 6) % presoSlides.length;
+        if (i !== presoIndex) { presoIndex = i; presoMat.map = presoSlides[i]; presoMat.needsUpdate = true; }
+      }
       renderer.render(scene, camera);
       if (!started) {
         started = true;
@@ -1306,7 +1490,9 @@
     // Expose for debugging / tweaking from the console.
     window.EBC = { scene, camera, renderer, controls, CONFIG, mat, root, THREE,
                    nearWall, farWall, ipadGroup, setGlassFrosted, openOverlay,
-                   laser, setRoomLightsOn, setDemoMode };
+                   laser, setRoomLightsOn, setDemoMode, setSpotlightMode,
+                   presoSet: (i) => { presoAuto = false; presoIndex = i; presoScreen.visible = true;
+                     presoMat.map = presoSlides[i]; presoMat.needsUpdate = true; } };
   </script>
 </body>
 </html>
