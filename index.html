@@ -1196,6 +1196,7 @@
 
     let ipadFaceMat = null;     // for the idle glow pulse in animate()
     let presoMat = null, presoScreen = null, presoSlides = [], presoIndex = -1, presoAuto = true;   // lab-glass slideshow
+    let confScreenMat = null, confSlides = [], confIndex = -1;   // conference-room wall display
     function buildIpad() {
       const g = new THREE.Group(); g.name = 'iPad';
       const w = 1.05 * FT, h = 0.8 * FT, t = 0.3 * IN;     // a generous, easy-to-spot tablet
@@ -1252,10 +1253,33 @@
       name: 'FarGlassWall',
       doors: [ { cx: labDoorCx, width: 3 * FT, handleSide: -1 } ],
     });
+    // A wall-mounted flat-panel display on the conference room's LEFT (–X) end wall,
+    // facing +X into the room. Cycles the same 3 preview slides (continuously). Opaque/
+    // unlit so it reads crisply; sits on a small dark backing panel + bezel (a mounting
+    // segment, not a full enclosing wall — the room stays open to orbit).
+    function buildConfScreen() {
+      const g = new THREE.Group(); g.name = 'ConfScreen';
+      const wallX = -L / 2, cz = D / 2;                       // left end, centred in depth
+      const scrW = 8 * FT, scrH = scrW * 9 / 16;              // ~4.5 ft tall
+      const cy = CONFIG.tableHeight + 10 * IN + scrH / 2;     // bottom clears the table top
+      g.add(at(box(2 * IN, scrH + 14 * IN, scrW + 14 * IN, mat.wallInfill, { cast: false }),
+               wallX - 1 * IN, cy, cz));                       // backing panel
+      g.add(at(box(1.5 * IN, scrH + 4 * IN, scrW + 4 * IN, mat.frame, { cast: false }),
+               wallX + 0.5 * IN, cy, cz));                     // bezel
+      confSlides = SLIDE_DRAWERS.map(d => makeSlideTexture(d));
+      confScreenMat = new THREE.MeshBasicMaterial({ map: confSlides[0] });
+      const screen = new THREE.Mesh(new THREE.PlaneGeometry(scrW, scrH), confScreenMat);
+      screen.position.set(wallX + 1.5 * IN, cy, cz);
+      screen.rotation.y = Math.PI / 2;                         // face +X (into the room)
+      g.add(screen);
+      root.add(g);
+      return g;
+    }
     buildTable();
     placeChairs();
     buildLab();
     buildRightRoom();
+    buildConfScreen();
     buildCeilingLights();
     const sceneLights = buildLighting();
     const ipadGroup = buildIpad();
@@ -1466,6 +1490,11 @@
           const i = Math.min(2, Math.floor((e - PRESO_T0) / SLIDE_DUR));
           if (i !== presoIndex) { presoIndex = i; presoMat.map = presoSlides[i]; presoMat.needsUpdate = true; }
         }
+      }
+      // Conference-room wall display: cycle the deck continuously (~6 s/slide).
+      if (confScreenMat && confSlides.length) {
+        const i = Math.floor(now / 6) % confSlides.length;
+        if (i !== confIndex) { confIndex = i; confScreenMat.map = confSlides[i]; confScreenMat.needsUpdate = true; }
       }
       renderer.render(scene, camera);
       if (!started) {
