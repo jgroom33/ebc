@@ -1410,7 +1410,9 @@
         setGlassFrosted(farWall.userData.glassMat, glassFrosted.far);
         setTileState(tile, glassFrosted.far, glassFrosted.far ? 'Frosted' : 'Clear');
       } else if (action === 'demo-mode') {
-        setDemoMode(!demoOn);                                 // setDemoMode(true) cancels spotlight
+        const starting = !demoOn;
+        setDemoMode(starting);                                // setDemoMode(true) cancels spotlight
+        if (starting) closeOverlay();                         // get the iPad panel out of the way
       } else if (action === 'spotlight') {
         if (demoOn) setDemoMode(false);                       // cancel a running Full Demo first
         setSpotlightMode(!spotlightOn);
