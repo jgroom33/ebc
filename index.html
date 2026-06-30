@@ -191,7 +191,7 @@
             <span class="icon">🎬</span>
             <span>
               <span class="label">Full Demo</span>
-              <span class="desc">Dim, frost, run the presentation, then spotlight the 6500</span>
+              <span class="desc">Dim the room, then spotlight the 6500</span>
             </span>
           </button>
           <button class="tile" data-action="conf-glass">
@@ -202,20 +202,20 @@
               <span class="desc">Frost the room's glass wall opaque</span>
             </span>
           </button>
-          <button class="tile" data-action="lab-glass">
-            <span class="state">Clear</span>
-            <span class="icon">🧪</span>
-            <span>
-              <span class="label">Lab Glass</span>
-              <span class="desc">Frost the lab glass &amp; show the presentation</span>
-            </span>
-          </button>
           <button class="tile" data-action="spotlight">
             <span class="state">Off</span>
             <span class="icon">🔦</span>
             <span>
               <span class="label">Spotlight</span>
               <span class="desc">Dim the room &amp; spotlight the 6500 section</span>
+            </span>
+          </button>
+          <button class="tile" data-action="fiber-ring">
+            <span class="state">Off</span>
+            <span class="icon">💛</span>
+            <span>
+              <span class="label">Fiber Ring</span>
+              <span class="desc">Dim the room &amp; laser-project the fiber ring on the 6500 &amp; RLS</span>
             </span>
           </button>
         </div>
@@ -656,6 +656,7 @@
     const RACK_H = RACK_PLINTH + RACK_U * U_M + 1.5 * IN;
     const DEV_FRONT = RACK_D / 2 + 0.3 * IN;   // device-face offset from rack centre (+Z)
     const fiberMats = [];                      // fat-line materials (need resolution on resize)
+    const fiberRings = [], fiberRingMats = []; // laser fiber-ring meshes + their materials
 
     // All equipment renders a uniform whitish-gray faceplate (device-type colour is
     // ignored). Both states are solid/opaque so every device is visible; deployed is a
@@ -716,10 +717,9 @@
         new THREE.MeshBasicMaterial({ map: tex }));                // opaque (no transparent flag)
     }
 
-    // ---- Lab-wall presentation slides ------------------------------------
+    // ---- Presentation slides (conference-room flat panel) ----------------
     // Each slide is drawn to a 16:9 canvas and wrapped in a CanvasTexture. The
-    // screen material is OPAQUE/unlit (MeshBasicMaterial) so it shows through the
-    // glass transmission pass and is visible from the conference room.
+    // screen material is OPAQUE/unlit (MeshBasicMaterial) so it reads crisply.
     function makeSlideTexture(draw) {
       const cv = document.createElement('canvas');
       cv.width = 1280; cv.height = 720;
@@ -842,22 +842,8 @@
       // Front bulkhead above the 9 ft glass wall, closing the taller lab to its ceiling.
       g.add(at(box(labL + 2 * wt, labH - H, wt, mat.wall), 0, (H + labH) / 2, zFront + wt / 2));
 
-      // Presentation projected across the lab's GLASS wall, facing the conference room.
-      // It shows only when that glass is FROSTED opaque (the "Lab Glass" control) — the
-      // frosted pane becomes the projection screen, read from across the hall. Slides cycle
-      // in animate(); opaque/unlit so it carries through the near-glass transmission pass.
-      presoSlides = SLIDE_DRAWERS.map(d => makeSlideTexture(d));
-      const scrH = 6.6 * FT, scrW = scrH * 16 / 9;                       // big 16:9, centred
-      const glassMidY = CONFIG.frameDepth + (H - CONFIG.frameDepth) / 2;
-      const scrZ = zFront + CONFIG.glassThickness / 2 + 0.6 * IN;        // just in front of the pane
-      presoMat = new THREE.MeshBasicMaterial({ map: presoSlides[0] });
-      presoScreen = new THREE.Mesh(new THREE.PlaneGeometry(scrW, scrH), presoMat);
-      presoScreen.position.set(0, glassMidY, scrZ);
-      presoScreen.visible = false;                                       // revealed when glass frosts
-      g.add(presoScreen);
-
       // Ceiling light panels (+ a few area lights NOT registered with Demo Mode,
-      // so the lab stays lit and back-lights the frosted glass during the demo).
+      // so the lab stays lit through its clear glass wall during the demo).
       const lp = 2 * FT, ly = labH - 1 * IN, cols = 4, rows = 2;
       const mX = labL * 0.16, mZ = labW * 0.20;
       for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) {
@@ -1000,6 +986,56 @@
           g.add(fl);
         }
       }
+
+      // Laser fiber-ring — wires a section's DWDM node shelves together in a closed optical
+      // ring (the way a 6500/RLS line system is cabled). "Nodes" are the photonic chassis
+      // (purple NODE_COLOR), excluding the small -OMC/-FMT sub-shelves; e.g. 6500 =
+      // Canyon·Breeze·Wind·Mountain·Peak, RLS = Wave·Atlantic·Tide·Pacific·Arctic. A small
+      // marker sits on each node. Loop + markers are OPAQUE so the three.js transmission pass
+      // carries them through the glass (transparent overlays are skipped, hence invisible).
+      // Hidden until the Fiber Ring control turns on (which drops the room to the dark backdrop
+      // so the yellow laser reads). Per-label like addSectionDownlight — more sections are one call.
+      const NODE_COLOR = '#A78BFA';
+      function addSectionRing(label) {
+        const z = LAB_RACKS.zones.find(zo => zo.label === label);
+        if (!z) return;
+        const nodes = [];
+        for (let o = orderOf(z.rackStart); o <= orderOf(z.rackEnd); o++)
+          for (const d of (LAB_RACKS.racks['A' + o]?.devices || [])) {
+            if (d.color !== NODE_COLOR || /OMC|FMT/i.test(d.name)) continue;   // sub-shelves aren't nodes
+            const p = devPos.get(d.name); if (p) nodes.push(p);
+          }
+        if (nodes.length < 3) return;
+        const zf = nodes[0].z + 1.5 * IN;                   // project just proud of the rack faces
+        // Order the nodes around their centroid so the loop is a simple (non-crossing) ring.
+        let cx = 0, cy = 0; for (const p of nodes) { cx += p.x; cy += p.y; }
+        cx /= nodes.length; cy /= nodes.length;
+        const ring = nodes.slice().sort((a, b) =>
+          Math.atan2(a.y - cy, a.x - cx) - Math.atan2(b.y - cy, b.x - cx));
+        const pts = [];
+        for (const p of ring) pts.push(p.x, p.y, zf);
+        pts.push(ring[0].x, ring[0].y, zf);                 // close the loop
+        const geo = new LineGeometry(); geo.setPositions(pts);
+        // OPAQUE (no `transparent` flag) so the transmission pass captures it and the ring shows
+        // through the conference-room glass — same reason the rack labels are kept opaque.
+        const lm = new LineMaterial({ color: 0xffe000, linewidth: 3 });
+        lm.resolution.set(window.innerWidth, window.innerHeight);
+        const line = new Line2(geo, lm);
+        line.renderOrder = 4; line.visible = false;
+        g.add(line);
+        fiberMats.push(lm); fiberRings.push(line); fiberRingMats.push(lm);
+        // A small opaque marker on each node.
+        const dotMat = new THREE.MeshBasicMaterial({ color: 0xffe000 });
+        const dotGeo = new THREE.SphereGeometry(1.6 * IN, 12, 8);
+        for (const p of ring) {
+          const dot = new THREE.Mesh(dotGeo, dotMat);
+          dot.position.set(p.x, p.y, zf);
+          dot.renderOrder = 4; dot.visible = false;
+          g.add(dot); fiberRings.push(dot);
+        }
+      }
+      addSectionRing('6500');
+      addSectionRing('RLS');
 
       root.add(g);
       return g;
@@ -1195,7 +1231,6 @@
     }
 
     let ipadFaceMat = null;     // for the idle glow pulse in animate()
-    let presoMat = null, presoScreen = null, presoSlides = [], presoIndex = -1, presoAuto = true;   // lab-glass slideshow
     let confScreenMat = null, confSlides = [], confIndex = -1;   // conference-room wall display
     function buildIpad() {
       const g = new THREE.Group(); g.name = 'iPad';
@@ -1335,12 +1370,13 @@
 
     // ----- Overlay wiring -----
     const overlay = document.getElementById('ipad-overlay');
-    const labTile = overlay.querySelector('[data-action="lab-glass"]');
     const demoTile = overlay.querySelector('[data-action="demo-mode"]');
     const spotTile = overlay.querySelector('[data-action="spotlight"]');
-    const glassFrosted = { near: false, far: false };
+    const fiberTile = overlay.querySelector('[data-action="fiber-ring"]');
+    const glassFrosted = { near: false };
     let demoOn = false;
     let spotlightOn = false;
+    let fiberRingOn = false;
     let demoStart = 0, demoStep = 0;       // Full Demo choreography clock + step pointer
 
     function openOverlay() {
@@ -1355,24 +1391,13 @@
       tile.classList.toggle('active', on);
       tile.querySelector('.state').textContent = text;
     }
-    // Frost / clear the lab glass (mirrors the "Lab Glass" action) — the frosted pane
-    // doubles as the presentation screen.
-    function frostFar(on) {
-      glassFrosted.far = on;
-      setGlassFrosted(farWall.userData.glassMat, on);        // default frost glow → solid white
-      setTileState(labTile, on, on ? 'Frosted' : 'Clear');
-    }
-    // Full Demo: a timed choreography — dim → frost glass → run the presentation → unfrost →
-    // light up the 6500 → hold a beat → auto-restore. Stages fire from a clock-based driver in
-    // animate() (the scene's established pattern); tapping the tile again aborts and restores.
-    const SLIDE_DUR = 5, PRESO_T0 = 0.7;                     // let the 0.6 s frost settle first
-    const PRESO_END = PRESO_T0 + 3 * SLIDE_DUR;              // 15.7 s — presentation done
-    const SPOT_T = PRESO_END + 0.7;                          // 16.4 s — light up the 6500
-    const RESTORE_T = SPOT_T + 10;                           // 26.4 s — hold the lit 6500 ~10 s, then restore
+    // Full Demo: a timed choreography — dim the room → light up the 6500 → hold a beat →
+    // auto-restore. Stages fire from a clock-based driver in animate() (the scene's established
+    // pattern); tapping the tile again aborts and restores.
+    const SPOT_T = 1.0;                                      // let the dim settle, then light the 6500
+    const RESTORE_T = SPOT_T + 10;                           // 11.0 s — hold the lit 6500 ~10 s, then restore
     const demoSteps = [
-      { t: 0.0,       fn: () => { setRoomLightsOn(false); frostFar(true);
-                                  presoAuto = false; presoScreen.visible = false; } },
-      { t: PRESO_END, fn: () => { presoScreen.visible = false; frostFar(false); } },
+      { t: 0.0,       fn: () => { setRoomLightsOn(false); } },
       { t: SPOT_T,    fn: () => { setSpotlightMode(true); } },   // safe: no demoOn cross-cancel
       { t: RESTORE_T, fn: () => { setDemoMode(false); } },       // finish + restore
     ];
@@ -1380,14 +1405,10 @@
       if (on) {
         if (spotlightOn) setSpotlightMode(false);            // start from a clean state
         demoOn = true; demoStart = clock.getElapsedTime(); demoStep = 0;
-        presoAuto = false;                                   // the sequencer drives the slides
-        if (presoScreen) presoScreen.visible = false;
         setTileState(demoTile, true, 'Running');
       } else {                                               // abort or natural finish → restore
-        demoOn = false; presoAuto = true;
-        if (presoScreen) presoScreen.visible = false;
+        demoOn = false;
         if (spotlightOn) setSpotlightMode(false);            // restore lights/exposure/dev-mats
-        frostFar(false);                                     // ensure the lab glass is clear
         setRoomLightsOn(true);
         setTileState(demoTile, false, 'Off');
       }
@@ -1416,23 +1437,28 @@
         sceneLights.hemi.intensity = 0.0;
         sceneLights.sun.intensity  = 0.0;
         sceneLights.fill.intensity = 0.0;
-        if (glassFrosted.far) {                              // ensure the lab glass is clear
-          glassFrosted.far = false;
-          setGlassFrosted(farWall.userData.glassMat, false);
-          setTileState(labTile, false, 'Clear');
-        }
+      } else if (fiberRingOn) {                              // re-lighting? the laser ring can't linger
+        fiberRingOn = false;
+        fiberRings.forEach(r => r.visible = false);
+        setTileState(fiberTile, false, 'Off');
       }
       setTileState(spotTile, on, on ? 'On' : 'Off');
+    }
+    // Fiber Ring: laser-project the yellow ring(s) on the 6500 & RLS. A laser graphic only reads
+    // in low ambient light, so turning it on drops the room to the dark Spotlight backdrop; off
+    // restores. (setSpotlightMode(false) also clears the rings, so the two stay in sync.)
+    function setFiberRing(on) {
+      if (on && demoOn) setDemoMode(false);                 // exit a running Full Demo first
+      fiberRingOn = on;
+      fiberRings.forEach(r => r.visible = on);
+      setSpotlightMode(on);                                 // darken / restore the laser backdrop
+      setTileState(fiberTile, on, on ? 'On' : 'Off');
     }
     function handleAction(action, tile) {
       if (action === 'conf-glass') {
         glassFrosted.near = !glassFrosted.near;
         setGlassFrosted(nearWall.userData.glassMat, glassFrosted.near);
         setTileState(tile, glassFrosted.near, glassFrosted.near ? 'Frosted' : 'Clear');
-      } else if (action === 'lab-glass') {
-        glassFrosted.far = !glassFrosted.far;
-        setGlassFrosted(farWall.userData.glassMat, glassFrosted.far);
-        setTileState(tile, glassFrosted.far, glassFrosted.far ? 'Frosted' : 'Clear');
       } else if (action === 'demo-mode') {
         const starting = !demoOn;
         setDemoMode(starting);                                // setDemoMode(true) cancels spotlight
@@ -1440,6 +1466,8 @@
       } else if (action === 'spotlight') {
         if (demoOn) setDemoMode(false);                       // cancel a running Full Demo first
         setSpotlightMode(!spotlightOn);
+      } else if (action === 'fiber-ring') {
+        setFiberRing(!fiberRingOn);
       }
     }
     overlay.addEventListener('click', (e) => {
@@ -1473,23 +1501,17 @@
       if (ipadFaceMat) {
         ipadFaceMat.emissiveIntensity = (ipadHover ? 1.0 : 0.7) + Math.sin(now * 2) * 0.12;
       }
-      // The lab-glass presentation shows when that glass is frosted opaque (outside Full Demo,
-      // which drives the slides itself via presoAuto=false). Advance slides (~6 s each).
-      if (presoScreen && presoAuto) presoScreen.visible = glassFrosted.far && !demoOn;
-      if (presoAuto && presoScreen && presoScreen.visible && presoSlides.length) {
-        const i = Math.floor(now / 6) % presoSlides.length;
-        if (i !== presoIndex) { presoIndex = i; presoMat.map = presoSlides[i]; presoMat.needsUpdate = true; }
-      }
-      // Full Demo choreography: fire each timed stage once, and drive the presentation slides
-      // (0→1→2) off demo-relative time so the show always starts on the Welcome slide.
+      // Full Demo choreography: fire each timed stage once.
       if (demoOn) {
         const e = now - demoStart;
         while (demoStep < demoSteps.length && e >= demoSteps[demoStep].t) demoSteps[demoStep++].fn();
-        if (e >= PRESO_T0 && e < PRESO_END && presoScreen) {
-          presoScreen.visible = true;
-          const i = Math.min(2, Math.floor((e - PRESO_T0) / SLIDE_DUR));
-          if (i !== presoIndex) { presoIndex = i; presoMat.map = presoSlides[i]; presoMat.needsUpdate = true; }
-        }
+      }
+      // Fiber-ring laser: a subtle brightness pulse so it reads as live laser light. The ring is
+      // opaque (to show through the glass), so pulse the colour itself rather than opacity —
+      // scaling laser-yellow 0xffe000 = (1, 0.878, 0).
+      if (fiberRingOn) {
+        const k = 0.7 + 0.3 * Math.sin(now * 4);
+        for (const m of fiberRingMats) m.color.setRGB(k, k * 0.878, 0);
       }
       // Conference-room wall display: cycle the deck continuously (~6 s/slide).
       if (confScreenMat && confSlides.length) {
@@ -1508,9 +1530,7 @@
     // Expose for debugging / tweaking from the console.
     window.EBC = { scene, camera, renderer, controls, CONFIG, mat, root, THREE,
                    nearWall, farWall, ipadGroup, setGlassFrosted, openOverlay,
-                   setRoomLightsOn, setDemoMode, setSpotlightMode,
-                   presoSet: (i) => { presoAuto = false; presoIndex = i; presoScreen.visible = true;
-                     presoMat.map = presoSlides[i]; presoMat.needsUpdate = true; } };
+                   setRoomLightsOn, setDemoMode, setSpotlightMode, setFiberRing };
   </script>
 </body>
 </html>
