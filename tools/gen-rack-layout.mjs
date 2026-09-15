@@ -75,19 +75,45 @@ const zones = readTable('data/ebc/split/zone_labels.csv')
     ru: parseInt(z.ru_anchor, 10), h: parseInt(z.ru_height, 10) || 1,
   }));
 
-// Fiber spans: pair the two position rows per fiber_id by node_name.
+// Fiber spans: pair the two position rows per fiber_id by node_name. Ring rows
+// (fiber_type = ring: the 6500 / RLS line-system loops) are skipped here — the page
+// draws those itself from the zone + node shelves (addSectionRing).
 const byId = {};
 for (const f of readTable('data/ebc/split/fiber_static.csv')) {
+  if ((f.fiber_type || '').trim().toLowerCase() === 'ring') continue;
   (byId[f.fiber_id] ||= []).push(f);
 }
-const fibers = Object.values(byId).map(rows => {
+const fibers = Object.entries(byId).flatMap(([id, rows]) => {
   rows.sort((a, b) => (+a.position) - (+b.position));
-  return {
+  if (rows.length !== 2) { console.warn(`skipping fiber '${id}': ${rows.length} positions (spans need 2)`); return []; }
+  return [{
     a: rows[0].node_name, b: rows[1].node_name,
     color: rows[0].stroke, dashed: !!(rows[0].dash && rows[0].dash.trim()),
     label: (rows[0].label || '').trim(),
-  };
+  }];
 });
+
+// Placards: a small name plate per listed device, in the free RU just below its
+// shelf (else just above, else on the shelf itself) — same rule as the SVG renderer.
+const placards = [];
+for (const pl of readTable('data/ebc/placards.csv')) {
+  const name = (pl.device_name || '').trim();
+  if (!name) continue;
+  let hit = null;
+  for (const [rackId, devs] of Object.entries(racks)) {
+    const d = devs.find(dv => dv.name === name);
+    if (d) { hit = { rackId, d }; break; }
+  }
+  if (!hit) { console.warn(`placard '${name}': device not placed in the split layout, skipped`); continue; }
+  const occ = new Set();
+  for (const dv of racks[hit.rackId]) for (let ru = dv.ru; ru < dv.ru + dv.h; ru++) occ.add(ru);
+  const below = hit.d.ru - 1, above = hit.d.ru + hit.d.h;
+  let ru, position;
+  if (below >= 1 && !occ.has(below)) { ru = below; position = 'below'; }
+  else if (above <= 58 && !occ.has(above)) { ru = above; position = 'above'; }
+  else { ru = hit.d.ru + hit.d.h - 1; position = 'inside'; }
+  placards.push({ name, label: (pl.label || '').trim() || name, rack: hit.rackId, ru, position });
+}
 
 // Compact, readable-ish JSON (one rack per line, in racks.csv order).
 const ids = Object.keys(meta);
@@ -95,7 +121,8 @@ const json =
   '{\n  racks: {\n' +
   ids.map(id => `    ${id}: ${JSON.stringify({ row: meta[id].row, order: meta[id].order, devices: racks[id] })}`).join(',\n') +
   '\n  },\n  zones: ' + JSON.stringify(zones) +
-  ',\n  fibers: ' + JSON.stringify(fibers) + '\n}';
+  ',\n  fibers: ' + JSON.stringify(fibers) +
+  ',\n  placards: ' + JSON.stringify(placards) + '\n}';
 
 const block = `/* LAB-RACKS-START */\n    const LAB_RACKS = ${json};\n    /* LAB-RACKS-END */`;
 
@@ -110,4 +137,4 @@ html = html.replace(re, block);
 writeFileSync(INDEX, html);
 
 const devCount = Object.values(racks).reduce((n, d) => n + d.length, 0);
-console.log(`Baked ${devCount} devices across ${ids.length} racks, ${zones.length} zones, ${fibers.length} fibers into index.html`);
+console.log(`Baked ${devCount} devices across ${ids.length} racks, ${zones.length} zones, ${fibers.length} fibers, ${placards.length} placards into index.html`);
