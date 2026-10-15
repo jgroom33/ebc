@@ -1017,7 +1017,9 @@
             const p = devPos.get(d.name); if (p) nodes.push(p);
           }
         if (nodes.length < 3) return;
-        const zf = nodes[0].z + 1.5 * IN;                   // project just proud of the rack faces
+        // Project just proud of the vertical cable managers, which stand 6" in front of the
+        // rack faces — any shallower and they hide the ring where it crosses the gaps.
+        const zf = nodes[0].z - DEV_FRONT + RACK_D / 2 + 7.5 * IN;
         // Order the nodes around their centroid so the loop is a simple (non-crossing) ring.
         let cx = 0, cy = 0; for (const p of nodes) { cx += p.x; cy += p.y; }
         cx /= nodes.length; cy /= nodes.length;
