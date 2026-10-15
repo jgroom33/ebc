@@ -215,7 +215,7 @@
             <span class="icon">💛</span>
             <span>
               <span class="label">Fiber Ring</span>
-              <span class="desc">Dim the room &amp; laser-project the fiber ring on the 6500 &amp; RLS</span>
+              <span class="desc">Dim the room &amp; laser-project the fiber ring on the 6500, RLS &amp; ELS</span>
             </span>
           </button>
         </div>
@@ -897,7 +897,9 @@
 
       // Section signage: one large opaque sign per zone, sitting above its equipment
       // in the clear RU gap (so it never overlaps gear), at the cable-trough plane.
-      const signZ = frontRackZ + RACK_D / 2 + 6 * IN;
+      // Half an inch proud of the cable managers' front faces (rack face + 6") so the signs
+      // don't z-fight / flicker against them.
+      const signZ = frontRackZ + RACK_D / 2 + 6.5 * IN;
       const occupiedFor = (rackStart, rackEnd) => {
         const occ = new Array(60).fill(false);
         for (let o = orderOf(rackStart); o <= orderOf(rackEnd); o++)
@@ -1001,7 +1003,8 @@
       // Laser fiber-ring — wires a section's DWDM node shelves together in a closed optical
       // ring (the way a 6500/RLS line system is cabled). "Nodes" are the photonic chassis
       // (purple NODE_COLOR), excluding the small -OMC/-FMT sub-shelves; e.g. 6500 =
-      // Canyon·Breeze·Wind·Mountain·Peak, RLS = Americas·Atlantic·Europe·Asia·Pacific. A small
+      // Canyon·Breeze·Wind·Mountain·Peak, RLS = Americas·Atlantic·Europe·Asia·Pacific, ELS =
+      // ELS-1-T-1·ELS-1-T-2·ELS-2-T-2·ELS-2-T-1. A small
       // marker sits on each node. Loop + markers are OPAQUE so the three.js transmission pass
       // carries them through the glass (transparent overlays are skipped, hence invisible).
       // Hidden until the Fiber Ring control turns on (which drops the room to the dark backdrop
@@ -1049,6 +1052,7 @@
       }
       addSectionRing('6500');
       addSectionRing('RLS');
+      addSectionRing('ELS');
 
       root.add(g);
       return g;
@@ -1457,7 +1461,7 @@
       }
       setTileState(spotTile, on, on ? 'On' : 'Off');
     }
-    // Fiber Ring: laser-project the yellow ring(s) on the 6500 & RLS. A laser graphic only reads
+    // Fiber Ring: laser-project the yellow ring(s) on the 6500, RLS & ELS. A laser graphic only reads
     // in low ambient light, so turning it on drops the room to the dark Spotlight backdrop; off
     // restores. (setSpotlightMode(false) also clears the rings, so the two stay in sync.)
     function setFiberRing(on) {
