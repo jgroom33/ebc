@@ -656,7 +656,8 @@
 
     // All equipment renders a uniform whitish-gray faceplate (device-type colour is
     // ignored). Both states are solid/opaque so every device is visible; deployed is a
-    // touch brighter, planned is dimmer and gets an amber outline (see makeRack).
+    // touch brighter, planned is dimmer. Every device gets an amber outline (see makeRack)
+    // so all gear still reads when the lights are off.
     const DEV_GRAY = 0xccd2d9;
     const devMatCache = new Map();
     function devMaterial(hex, state) {
@@ -672,7 +673,7 @@
       }
       return m;
     }
-    const plannedEdgeMat = new THREE.LineBasicMaterial({ color: 0xf6a623 });  // amber = planned
+    const devEdgeMat = new THREE.LineBasicMaterial({ color: 0xf6a623 });  // amber device outline
 
     // A transparent-background canvas-text label plane (rack IDs, zones, fiber tags).
     function makeLabelPlane(text, wM, hM, { color = '#eaf1f8', bg = null, size = 64, bold = true } = {}) {
@@ -810,11 +811,9 @@
         const y = RACK_PLINTH + (dv.ru - 1 + dv.h / 2) * U_M;
         const panel = at(box(devW, hh, 1.4 * IN, devMaterial(dv.color, dv.state), { cast: false }), 0, y, DEV_FRONT);
         g.add(panel);
-        if (dv.state !== 'deployed') {            // amber outline marks planned gear
-          const edges = new THREE.LineSegments(new THREE.EdgesGeometry(panel.geometry), plannedEdgeMat);
-          edges.position.copy(panel.position);
-          g.add(edges);
-        }
+        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(panel.geometry), devEdgeMat);
+        edges.position.copy(panel.position);       // amber outline on every device
+        g.add(edges);
       }
       return g;
     }
