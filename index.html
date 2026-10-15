@@ -471,17 +471,12 @@
       const dh = CONFIG.doorHeight;
       const leftEnd = -L / 2 + fd, rightEnd = L / 2 - fd;
 
-      // Glaze a horizontal segment [xs, xe] into glass bays, with intermediate mullions
-      // (none at the segment ends — those are framed by their neighbours).
+      // Glaze a horizontal segment [xs, xe] as one seamless pane — no intermediate
+      // mullions (the segment ends are framed by their neighbours).
       function glazeBays(xs, xe) {
         const w = xe - xs;
         if (w < 0.02) return;
-        const bays = Math.max(1, Math.round(w / (8 * FT)));
-        const bayW = w / bays;
-        for (let i = 0; i < bays; i++) {
-          g.add(at(box(bayW - fd, glassH, gt, glass, { cast: false }), xs + bayW * (i + 0.5), glassY, z));
-          if (i > 0) g.add(mullion(xs + bayW * i, z));
-        }
+        g.add(at(box(w, glassH, gt, glass, { cast: false }), (xs + xe) / 2, glassY, z));
       }
       // Fill a span [xs, xe], rendering any portion inside a `solid` range as an opaque
       // infill panel (no glass) and the rest as glass bays.
