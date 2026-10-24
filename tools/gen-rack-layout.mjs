@@ -1,130 +1,142 @@
 #!/usr/bin/env node
-// Generates the baked lab-rack layout data for index.html from the EBC "split"
-// concept CSVs in the sibling ebc-inventory repo, and writes it into index.html
+// Generates the baked lab-rack layout data for index.html from the na-sales-lab inventory
+// YAML (ciena-corp/na-sales-lab, provisioner/inventory/) and writes it into index.html
 // between the /* LAB-RACKS-START */ … /* LAB-RACKS-END */ markers.
 //
-// Front display row A1–A10 only (the glass-facing lineup), full detail:
-// device blocks (coloured by type, planned/deployed), zone bands, fiber spans.
+// Reads the EBC layout straight from the lab repo's latest commit: it fetches `origin` and
+// reads each file at origin/main with `git show`, so the checkout's working tree (and any
+// local edits in it) is never used or touched. YAML is parsed by python3 + PyYAML, which the
+// lab repo already requires.
 //
-// Regenerate after editing the inventory:  node tools/gen-rack-layout.mjs
+//   node tools/gen-rack-layout.mjs                      # lab repo at ../lab, ref origin/main
+//   LAB_REPO=~/src/lab LAB_REF=origin/main node tools/gen-rack-layout.mjs
+//   node tools/gen-rack-layout.mjs --no-fetch           # use the ref as already fetched
+//
+// Racks: layouts.yml EBC placements (front face only; rear-mounted gear and 0U items are not
+// drawn), heights from device_types*.yml, planned vs deployed from devices*.yml `status`.
+// Zone signs: the Placard-3U devices (label from their notes, span from `rack_span`).
+// Laser rings / dashed spans / RLS name placards: optical_systems.yml.
 
 import { readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { homedir } from 'node:os';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const INV = resolve(here, '../../ebc-inventory/lab-rack-layout');
 const INDEX = resolve(here, '../index.html');
+const LAB = resolve((process.env.LAB_REPO || resolve(here, '../../lab')).replace(/^~(?=\/|$)/, homedir()));
+const REF = process.env.LAB_REF || 'origin/main';
+const LAYOUT = 'EBC';
 
-// Minimal CSV parser (handles quoted fields with commas, e.g. "6,3").
-function parseCSV(text) {
-  const rows = [];
-  let row = [], field = '', q = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (q) {
-      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
-      else if (c === '"') q = false;
-      else field += c;
-    } else if (c === '"') q = true;
-    else if (c === ',') { row.push(field); field = ''; }
-    else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
-    else if (c === '\r') { /* skip */ }
-    else field += c;
+// Waveserver line spans the page draws. The inventory models only their Calient patching
+// (fibers.yml), not the line side, so these display-only spans live here.
+const DISPLAY_FIBERS = [
+  { a: 'Waveserver-5-West-1', b: 'Waveserver-5-East-1', color: '#0891B2', dashed: false, label: '(800G)' },
+  { a: 'WS-2P', b: 'WS-1P', color: '#0EA5E9', dashed: false, label: '(400G)' },
+];
+const SPAN_COLOR = '#0284C7';           // dashed linear-system spans (ELS, RLS-300)
+const PLACARD_FAMILIES = new Set(['RLS']);   // optical families whose nodes get a name placard
+
+const git = (...args) => execFileSync('git', ['-C', LAB, ...args], { encoding: 'utf8', maxBuffer: 64 << 20 });
+if (!process.argv.includes('--no-fetch')) git('fetch', '-q', 'origin');
+const commit = git('log', '-1', '--format=%h %s', REF).trim();
+
+// YAML → JSON through python3 + PyYAML (no node dependencies in this repo).
+function readYaml(file) {
+  const text = git('show', `${REF}:provisioner/inventory/${file}`);
+  const json = execFileSync('python3', ['-c',
+    'import sys, json, yaml; json.dump(yaml.safe_load(sys.stdin), sys.stdout, default=str)'],
+    { input: text, encoding: 'utf8', maxBuffer: 64 << 20 });
+  return JSON.parse(json);
+}
+
+const devices = {}, types = {};
+for (const f of ['devices.yml', 'devices_mgt.yml']) for (const d of readYaml(f).devices) devices[d.name] = d;
+for (const f of ['device_types.yml', 'device_types_mgt.yml']) for (const t of readYaml(f).device_types) types[t.model] = t;
+const layout = readYaml('layouts.yml').layouts.find(l => l.name === LAYOUT);
+if (!layout) { console.error(`ERROR: layout '${LAYOUT}' not found in layouts.yml @ ${REF}`); process.exit(1); }
+const systems = readYaml('optical_systems.yml').optical_systems;
+
+// EBC racks in racks.yml order: A* = front display row, B* = back row; order = the number.
+const rackIds = readYaml('racks.yml').racks.filter(r => r.location === LAYOUT).map(r => r.name);
+const racks = Object.fromEntries(rackIds.map(id => [id, {
+  row: id[0] === 'A' ? 'front' : 'back', order: parseInt(id.slice(1), 10), devices: [],
+}]));
+
+const zones = [];
+for (const p of layout.placements) {
+  if (!racks[p.rack]) continue;
+  const d = devices[p.device];
+  if (!d) { console.warn(`skipping '${p.device}': not in devices*.yml`); continue; }
+  const h = types[d.device_type]?.u_height ?? 1;
+  if (d.device_type.startsWith('Placard-')) {            // zone sign across rack_span racks
+    const label = (d.notes || '').match(/zone placard "([^"]+)"/)?.[1];
+    if (!label) { console.warn(`skipping placard '${p.device}': no zone label in its notes`); continue; }
+    const i = rackIds.indexOf(p.rack), span = p.rack_span || 1;
+    // ru = the placard's middle U (the plan's anchor): position 48 of a 3U panel -> 49.
+    zones.push({ rackStart: p.rack, rackEnd: rackIds[i + span - 1], label, ru: p.position + Math.floor(h / 2), h });
+    continue;
   }
-  if (field.length || row.length) { row.push(field); rows.push(row); }
-  return rows.filter(r => r.length > 1 || (r.length === 1 && r[0] !== ''));
+  if (p.face === 'rear' || !h) continue;                 // only the front faces are drawn
+  racks[p.rack].devices.push({ name: p.device, ru: p.position, h, state: d.status === 'planned' ? 'planned' : 'deployed' });
 }
-function readTable(rel) {
-  const rows = parseCSV(readFileSync(resolve(INV, rel), 'utf8'));
-  const head = rows[0];
-  return rows.slice(1).map(r => Object.fromEntries(head.map((h, i) => [h, r[i] ?? ''])));
+for (const r of Object.values(racks)) r.devices.sort((a, b) => a.ru - b.ru);
+const placed = new Map();                                  // device -> rack id
+for (const [id, r] of Object.entries(racks)) for (const d of r.devices) placed.set(d.name, id);
+
+// Laser rings, per optical family: its ring-topology system's nodes; a family with only
+// linear systems (ELS) loops their terminals instead.
+const rings = {};
+for (const fam of new Set(systems.map(s => s.family))) {
+  const fs = systems.filter(s => s.family === fam);
+  const ringSys = fs.filter(s => s.topology === 'ring');
+  const nodes = ringSys.length
+    ? ringSys.flatMap(s => s.nodes.map(n => n.node))
+    : fs.flatMap(s => s.nodes.filter(n => n.role === 'terminal').map(n => n.node));
+  const drawn = nodes.filter(n => placed.has(n));
+  if (drawn.length >= 3) rings[fam] = drawn;
 }
 
-// device_type -> {u, color}
-const types = {};
-for (const d of readTable('data/device_types.csv')) {
-  types[d.device_type] = { u: parseInt(d.u_height, 10) || 1, color: d.color || '#A0AEC0' };
+// Dashed fibers: every span of a linear system (the rings are drawn by the laser loop).
+const fibers = [];
+for (const s of systems.filter(s => s.topology === 'linear'))
+  for (const sp of s.spans || [])
+    if (placed.has(sp.a.node) && placed.has(sp.z.node))
+      fibers.push({ a: sp.a.node, b: sp.z.node, color: SPAN_COLOR, dashed: true, label: '' });
+for (const f of DISPLAY_FIBERS) {
+  if (placed.has(f.a) && placed.has(f.b)) fibers.push(f);
+  else console.warn(`display fiber ${f.a} - ${f.b}: an end is not placed in ${LAYOUT}, skipped`);
 }
 
-// All racks from racks.csv (front row A1..A10 + back row B2..B8), each with its
-// row + left-right display order and a list of devices placed by RU.
-const meta = {};
-for (const r of readTable('data/racks.csv')) {
-  meta[r.rack_id] = { row: r.row, order: parseInt(r.display_order, 10) };
-}
-const racks = Object.fromEntries(Object.keys(meta).map(id => [id, []]));
-for (const p of readTable('data/ebc/split/rack_layout.csv')) {
-  if (!racks[p.rack_id]) continue;                       // ignore unknown racks
-  const t = types[p.device_type] || { u: 1, color: '#A0AEC0' };
-  const h = parseInt(p.ru_height, 10) || t.u;            // blank height -> type u_height
-  racks[p.rack_id].push({
-    name: p.device_name,
-    ru: parseInt(p.ru_start, 10),
-    h,
-    color: t.color,
-    state: p.state,                                       // 'planned' | 'deployed'
-  });
-}
-
-// Zone bands spanning rack ranges at an RU anchor.
-const zones = readTable('data/ebc/split/zone_labels.csv')
-  .filter(z => racks[z.rack_start])
-  .map(z => ({
-    rackStart: z.rack_start, rackEnd: z.rack_end, label: z.label,
-    ru: parseInt(z.ru_anchor, 10), h: parseInt(z.ru_height, 10) || 1,
-  }));
-
-// Fiber spans: pair the two position rows per fiber_id by node_name. Ring rows
-// (fiber_type = ring: the 6500 / RLS line-system loops) are skipped here — the page
-// draws those itself from the zone + node shelves (addSectionRing).
-const byId = {};
-for (const f of readTable('data/ebc/split/fiber_static.csv')) {
-  if ((f.fiber_type || '').trim().toLowerCase() === 'ring') continue;
-  (byId[f.fiber_id] ||= []).push(f);
-}
-const fibers = Object.entries(byId).flatMap(([id, rows]) => {
-  rows.sort((a, b) => (+a.position) - (+b.position));
-  if (rows.length !== 2) { console.warn(`skipping fiber '${id}': ${rows.length} positions (spans need 2)`); return []; }
-  return [{
-    a: rows[0].node_name, b: rows[1].node_name,
-    color: rows[0].stroke, dashed: !!(rows[0].dash && rows[0].dash.trim()),
-    label: (rows[0].label || '').trim(),
-  }];
-});
-
-// Placards: a small name plate per listed device, in the free RU just below its
-// shelf (else just above, else on the shelf itself) — same rule as the SVG renderer.
+// Name placards for the PLACARD_FAMILIES nodes, in the free U just below the shelf (else just
+// above, else on the shelf itself).
 const placards = [];
-for (const pl of readTable('data/ebc/placards.csv')) {
-  const name = (pl.device_name || '').trim();
-  if (!name) continue;
-  let hit = null;
-  for (const [rackId, devs] of Object.entries(racks)) {
-    const d = devs.find(dv => dv.name === name);
-    if (d) { hit = { rackId, d }; break; }
+for (const s of systems.filter(s => PLACARD_FAMILIES.has(s.family)))
+  for (const { node: name } of s.nodes) {
+    const rackId = placed.get(name);
+    if (!rackId) continue;
+    const devs = racks[rackId].devices, d = devs.find(dv => dv.name === name);
+    const occ = new Set();
+    for (const dv of devs) for (let ru = dv.ru; ru < dv.ru + dv.h; ru++) occ.add(ru);
+    const below = d.ru - 1, above = d.ru + d.h;
+    let ru, position;
+    if (below >= 1 && !occ.has(below)) { ru = below; position = 'below'; }
+    else if (above <= 58 && !occ.has(above)) { ru = above; position = 'above'; }
+    else { ru = d.ru + d.h - 1; position = 'inside'; }
+    placards.push({ name, label: name, rack: rackId, ru, position });
   }
-  if (!hit) { console.warn(`placard '${name}': device not placed in the split layout, skipped`); continue; }
-  const occ = new Set();
-  for (const dv of racks[hit.rackId]) for (let ru = dv.ru; ru < dv.ru + dv.h; ru++) occ.add(ru);
-  const below = hit.d.ru - 1, above = hit.d.ru + hit.d.h;
-  let ru, position;
-  if (below >= 1 && !occ.has(below)) { ru = below; position = 'below'; }
-  else if (above <= 58 && !occ.has(above)) { ru = above; position = 'above'; }
-  else { ru = hit.d.ru + hit.d.h - 1; position = 'inside'; }
-  placards.push({ name, label: (pl.label || '').trim() || name, rack: hit.rackId, ru, position });
-}
 
-// Compact, readable-ish JSON (one rack per line, in racks.csv order).
-const ids = Object.keys(meta);
+// Compact, readable-ish JSON (one rack per line, in racks.yml order).
 const json =
   '{\n  racks: {\n' +
-  ids.map(id => `    ${id}: ${JSON.stringify({ row: meta[id].row, order: meta[id].order, devices: racks[id] })}`).join(',\n') +
+  rackIds.map(id => `    ${id}: ${JSON.stringify(racks[id])}`).join(',\n') +
   '\n  },\n  zones: ' + JSON.stringify(zones) +
   ',\n  fibers: ' + JSON.stringify(fibers) +
+  ',\n  rings: ' + JSON.stringify(rings) +
   ',\n  placards: ' + JSON.stringify(placards) + '\n}';
 
-const block = `/* LAB-RACKS-START */\n    const LAB_RACKS = ${json};\n    /* LAB-RACKS-END */`;
+const block = `/* LAB-RACKS-START */\n    // na-sales-lab @ ${commit.replace(/\*\//g, '* /')}\n    const LAB_RACKS = ${json};\n    /* LAB-RACKS-END */`;
 
 let html = readFileSync(INDEX, 'utf8');
 const re = /\/\* LAB-RACKS-START \*\/[\s\S]*?\/\* LAB-RACKS-END \*\//;
@@ -133,8 +145,10 @@ if (!re.test(html)) {
                 '    /* LAB-RACKS-START */\n    /* LAB-RACKS-END */');
   process.exit(1);
 }
-html = html.replace(re, block);
+html = html.replace(re, () => block);
 writeFileSync(INDEX, html);
 
-const devCount = Object.values(racks).reduce((n, d) => n + d.length, 0);
-console.log(`Baked ${devCount} devices across ${ids.length} racks, ${zones.length} zones, ${fibers.length} fibers, ${placards.length} placards into index.html`);
+const devCount = Object.values(racks).reduce((n, r) => n + r.devices.length, 0);
+console.log(`Baked ${devCount} devices across ${rackIds.length} racks, ${zones.length} zones, ` +
+  `${fibers.length} fibers, ${Object.keys(rings).length} rings, ${placards.length} placards ` +
+  `from na-sales-lab @ ${commit}`);

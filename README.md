@@ -54,6 +54,20 @@ central three racks (A6 sits ~7.5" right of the conference-table axis).
 The options live in `RACK_LAYOUTS` in `index.html`,
 outside the generated `LAB-RACKS` block, so regenerating the inventory keeps them.
 
+## Lab rack data
+
+The racks, zone signs, fiber rings and RLS name plates are baked into `index.html` from the
+EBC layout in the [na-sales-lab](https://github.com/ciena-corp/na-sales-lab) inventory YAML
+(`provisioner/inventory/`). To refresh after an inventory change:
+
+```bash
+node tools/gen-rack-layout.mjs        # fetches ../lab and reads origin/main
+```
+
+`LAB_REPO` / `LAB_REF` point it at another checkout or ref, and `--no-fetch` skips the fetch.
+It reads files with `git show`, so the lab checkout's working tree is never used. Needs
+`python3` with PyYAML.
+
 ## Customising
 
 Everything is parametric. Open `index.html` and edit the `CONFIG` block near the top
