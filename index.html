@@ -27,6 +27,34 @@
       color: #cdd8e3; opacity: 0.7; pointer-events: none; user-select: none;
     }
 
+    /* Rack-layout switcher — a 2D bar over the scene so layouts can be stepped through
+       while watching the lab change (← / → keys do the same). */
+    #layout-bar {
+      position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 12;
+      display: flex; align-items: center; gap: 20px; padding: 14px 18px;
+      border-radius: 22px; background: rgba(14,20,29,0.80);
+      border: 1px solid rgba(120,170,230,0.22); box-shadow: 0 12px 36px rgba(0,0,0,0.45);
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif; color: #eaf1f8;
+      user-select: none; max-width: calc(100vw - 32px);
+    }
+    #layout-bar button {
+      width: 56px; height: 56px; flex: 0 0 auto; border-radius: 50%; cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06);
+      color: #eaf1f8; font-size: 32px; line-height: 1; padding-bottom: 4px;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    #layout-bar button:hover { background: rgba(47,143,230,0.25); border-color: rgba(47,143,230,0.6); }
+    #layout-bar .info { text-align: center; min-width: 0; width: 400px; max-width: 100%; }
+    #layout-bar .name { font-size: 14px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: #8fb8e6; }
+    #layout-bar .desc { font-size: 20px; font-weight: 600; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #layout-bar .dots { display: flex; justify-content: center; gap: 9px; margin-top: 10px; }
+    #layout-bar .dot {
+      width: 10px; height: 10px; border-radius: 50%; padding: 0; border: 0; cursor: pointer;
+      background: rgba(255,255,255,0.25);
+    }
+    #layout-bar .dot.on { background: #2f8fe6; }
+
     /* Loading screen */
     #loader {
       position: fixed; inset: 0; z-index: 20; display: flex;
@@ -169,7 +197,16 @@
     <div class="logo">CIENA</div>
     <div class="sub">EXECUTIVE BRIEFING CENTER</div>
   </div>
-  <div id="hint">drag to orbit · scroll to zoom · right-drag to pan</div>
+  <div id="hint">drag to orbit · scroll to zoom · right-drag to pan · ← / → rack layout</div>
+  <div id="layout-bar" role="group" aria-label="Rack layout">
+    <button data-step="-1" title="Previous layout (←)" aria-label="Previous layout">‹</button>
+    <div class="info">
+      <div class="name"></div>
+      <div class="desc"></div>
+      <div class="dots"></div>
+    </div>
+    <button data-step="1" title="Next layout (→)" aria-label="Next layout">›</button>
+  </div>
 
   <div id="loader"><div class="spin"></div><div>Building conference room…</div></div>
   <div id="error"></div>
@@ -636,11 +673,44 @@
     B7: {"row":"back","order":7,"devices":[{"name":"Exfo-1","ru":30,"h":4,"color":"#A0AEC0","state":"deployed"},{"name":"JNP7100-48L-1","ru":34,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5170-81","ru":35,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5170-82","ru":36,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5170-8","ru":37,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5170-7","ru":38,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5170-6","ru":39,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5170-5","ru":40,"h":1,"color":"#60A5FA","state":"deployed"},{"name":"5171-3","ru":41,"h":2,"color":"#60A5FA","state":"deployed"},{"name":"5171-4","ru":43,"h":2,"color":"#60A5FA","state":"deployed"},{"name":"5171-81","ru":45,"h":2,"color":"#60A5FA","state":"deployed"},{"name":"5171-82","ru":47,"h":2,"color":"#60A5FA","state":"deployed"}]},
     B8: {"row":"back","order":8,"devices":[]}
   },
-  zones: [{"rackStart":"A10","rackEnd":"A10","label":"Outdoor","ru":49,"h":3},{"rackStart":"A10","rackEnd":"A10","label":"Outdoor Units","ru":39,"h":12},{"rackStart":"A5","rackEnd":"A6","label":"ELS","ru":28,"h":3},{"rackStart":"A1","rackEnd":"A1","label":"TDM","ru":28,"h":3},{"rackStart":"A2","rackEnd":"A4","label":"RLS","ru":28,"h":3},{"rackStart":"A7","rackEnd":"A9","label":"6500","ru":28,"h":3},{"rackStart":"A1","rackEnd":"A1","label":"Access","ru":49,"h":3},{"rackStart":"A7","rackEnd":"A9","label":"Datacenter Interconnect","ru":49,"h":3},{"rackStart":"A2","rackEnd":"A4","label":"Converged Metro","ru":49,"h":3},{"rackStart":"A5","rackEnd":"A6","label":"Aggregation","ru":49,"h":3}],
+  zones: [{"rackStart":"A10","rackEnd":"A10","label":"DCOM","ru":49,"h":3},{"rackStart":"A10","rackEnd":"A10","label":"Outdoor","ru":33,"h":3},{"rackStart":"A10","rackEnd":"A10","label":"Outdoor Units","ru":23,"h":12},{"rackStart":"A5","rackEnd":"A6","label":"ELS","ru":28,"h":3},{"rackStart":"A1","rackEnd":"A1","label":"TDM","ru":28,"h":3},{"rackStart":"A2","rackEnd":"A4","label":"RLS","ru":28,"h":3},{"rackStart":"A7","rackEnd":"A9","label":"6500","ru":28,"h":3},{"rackStart":"A1","rackEnd":"A1","label":"Access","ru":49,"h":3},{"rackStart":"A7","rackEnd":"A9","label":"Datacenter Interconnect","ru":49,"h":3},{"rackStart":"A2","rackEnd":"A4","label":"Converged Metro","ru":49,"h":3},{"rackStart":"A5","rackEnd":"A6","label":"Aggregation","ru":49,"h":3}],
   fibers: [{"a":"ELS-1-T-1","b":"ELS-1-T-2","color":"#0284C7","dashed":true,"label":""},{"a":"ELS-2-T-1","b":"ELS-2-T-2","color":"#0284C7","dashed":true,"label":""},{"a":"WaveServer-West","b":"WaveServer-East","color":"#0891B2","dashed":false,"label":"(800G)"},{"a":"WaveServer-West-2","b":"WaveServer-East-2","color":"#38BDF8","dashed":false,"label":"(800G)"},{"a":"WS-2P","b":"WS-1P","color":"#0EA5E9","dashed":false,"label":"(400G)"}],
   placards: [{"name":"Americas","label":"Americas","rack":"A2","ru":19,"position":"below"},{"name":"Atlantic","label":"Atlantic","rack":"A3","ru":21,"position":"below"},{"name":"Europe","label":"Europe","rack":"A4","ru":19,"position":"below"},{"name":"Asia","label":"Asia","rack":"A4","ru":15,"position":"above"},{"name":"Pacific","label":"Pacific","rack":"A2","ru":14,"position":"above"}]
 };
     /* LAB-RACKS-END */
+
+    // Front-row layout options (RLS centred) for the iPad "Rack Layout" tile / ?layout=N.
+    // Each lists the baked racks' CURRENT display orders as section blocks, in their new
+    // left→right sequence — so a section's devices, signs, placards, fibers and ring move
+    // with it as one block. Racks never move; RLS lands on A5–A7, the most central 3 racks
+    // (A6 is ~7.5" right of the conference-table axis). The back row never changes.
+    const RACK_LAYOUTS = [
+      { name: 'Current',  desc: 'TDM · RLS · ELS · 6500 · Outdoor',
+        blocks: [[1], [2, 3, 4], [5, 6], [7, 8, 9], [10]] },
+      { name: 'Option 1 · Optical core', desc: 'TDM · 6500 · RLS · ELS · Outdoor',
+        blocks: [[1], [7, 8, 9], [2, 3, 4], [5, 6], [10]] },
+      { name: 'Option 2 · Edge → core', desc: 'Outdoor · TDM · ELS · RLS · 6500',
+        blocks: [[10], [1], [5, 6], [2, 3, 4], [7, 8, 9]] },
+      { name: 'Option 3 · Aggregation left', desc: 'ELS · Outdoor · TDM · RLS · 6500',
+        blocks: [[5, 6], [10], [1], [2, 3, 4], [7, 8, 9]] },
+    ];
+    // A copy of LAB_RACKS with the front row re-ordered per `layout` (old order → new order).
+    function remapLabRacks(layout) {
+      const newOf = new Map();
+      layout.blocks.flat().forEach((o, i) => newOf.set(o, i + 1));
+      const mapId = (id) => (id[0] === 'A' && newOf.has(+id.slice(1))) ? 'A' + newOf.get(+id.slice(1)) : id;
+      const racks = {};
+      for (const [id, rk] of Object.entries(LAB_RACKS.racks))
+        racks[mapId(id)] = rk.row === 'front' ? { ...rk, order: newOf.get(rk.order) ?? rk.order } : rk;
+      const zones = LAB_RACKS.zones.map(z => {
+        const a = +mapId(z.rackStart).slice(1), b = +mapId(z.rackEnd).slice(1);
+        return { ...z, rackStart: 'A' + Math.min(a, b), rackEnd: 'A' + Math.max(a, b) };
+      });
+      const placards = (LAB_RACKS.placards || []).map(p => ({ ...p, rack: mapId(p.rack) }));
+      return { racks, zones, fibers: LAB_RACKS.fibers, placards };
+    }
+    const layoutParam = parseInt(new URLSearchParams(location.search).get('layout'), 10);
+    let rackLayoutIdx = (layoutParam >= 0 && layoutParam < RACK_LAYOUTS.length) ? layoutParam : 0;
 
     // A 19" equipment rack: 58U of mounting space (19" internal + ~1" frame each side
     // → ~21" external). Devices are placed by RU, RU 1 at the bottom, coloured by type.
@@ -817,7 +887,7 @@
       }
       return g;
     }
-    function buildLab() {
+    function buildLab(labData) {
       const g = new THREE.Group(); g.name = 'Lab';
       const labL = CONFIG.labLength, labW = CONFIG.labWidth;
       const xHalf = labL / 2;
@@ -866,7 +936,7 @@
       const xOfOrder = (o) => xRight - pitch * (10 - o);
 
       const rowsInfo = {};                             // row -> { z, orders[] }
-      for (const [id, rk_] of Object.entries(LAB_RACKS.racks)) {
+      for (const [id, rk_] of Object.entries(labData.racks)) {
         const x = xOfOrder(rk_.order), z = rk_.row === 'back' ? backRackZ : frontRackZ;
         const rk = makeRack(rk_.devices);
         rk.position.set(x, 0, z);
@@ -902,7 +972,7 @@
       const occupiedFor = (rackStart, rackEnd) => {
         const occ = new Array(60).fill(false);
         for (let o = orderOf(rackStart); o <= orderOf(rackEnd); o++)
-          for (const d of (LAB_RACKS.racks['A' + o]?.devices || []))
+          for (const d of (labData.racks['A' + o]?.devices || []))
             for (let ru = d.ru; ru < d.ru + d.h; ru++) if (ru >= 1 && ru <= 59) occ[ru] = true;
         return occ;
       };
@@ -915,14 +985,14 @@
       // The 6500/ELS/RLS lower-section signs share ONE aligned band — the clear gap
       // common to their racks, capped by the tightest section (RLS, under the 8192s).
       const ALIGNED = new Set(['6500', 'ELS', 'RLS', 'TDM']);
-      const lowerZones = LAB_RACKS.zones.filter(z => ALIGNED.has(z.label));
+      const lowerZones = labData.zones.filter(z => ALIGNED.has(z.label));
       let alignedBand = null;
       if (lowerZones.length) {
         const occ = new Array(60).fill(false);
         for (const z of lowerZones) { const o2 = occupiedFor(z.rackStart, z.rackEnd); for (let i = 0; i < 60; i++) if (o2[i]) occ[i] = true; }
         alignedBand = gapBand(occ, lowerZones[0].ru);
       }
-      for (const z of LAB_RACKS.zones) {
+      for (const z of labData.zones) {
         if (z.label === 'Outdoor Units') continue;     // not signed (redundant with Outdoor)
         const { bottom, hRU } = (ALIGNED.has(z.label) && alignedBand)
           ? alignedBand
@@ -942,7 +1012,7 @@
       // the equipment below. Always on; in Spotlight mode (room dark) it makes the section
       // glow. Built per-label so more sections can be added with another call.
       function addSectionDownlight(label) {
-        const z = LAB_RACKS.zones.find(zo => zo.label === label);
+        const z = labData.zones.find(zo => zo.label === label);
         if (!z) return;
         const { bottom } = (ALIGNED.has(label) && alignedBand)
           ? alignedBand
@@ -961,7 +1031,7 @@
       addSectionDownlight('6500');
 
       // Fiber spans: a glowing patch-cable between two named devices, bowed toward the glass.
-      for (const f of LAB_RACKS.fibers) {
+      for (const f of labData.fibers) {
         const a = devPos.get(f.a), b = devPos.get(f.b);
         if (!a || !b) continue;
         const front = 2.5 * IN;                        // float off the rack faces
@@ -988,8 +1058,8 @@
       // device listed in data/ebc/placards.csv (the RLS ring nodes), in the free RU next to
       // its shelf — the generator has already picked the RU (below, else above, else on the
       // shelf). Opaque so it survives the glass transmission pass like the section signs.
-      for (const pl of (LAB_RACKS.placards || [])) {
-        const rk = LAB_RACKS.racks[pl.rack];
+      for (const pl of (labData.placards || [])) {
+        const rk = labData.racks[pl.rack];
         if (!rk) continue;
         const x = xOfOrder(rk.order), z = rk.row === 'back' ? backRackZ : frontRackZ;
         const hM = 0.8 * U_M, wM = 11 * IN;
@@ -1010,11 +1080,11 @@
       // so the yellow laser reads). Per-label like addSectionDownlight — more sections are one call.
       const NODE_COLOR = '#A78BFA';
       function addSectionRing(label) {
-        const z = LAB_RACKS.zones.find(zo => zo.label === label);
+        const z = labData.zones.find(zo => zo.label === label);
         if (!z) return;
         const nodes = [];
         for (let o = orderOf(z.rackStart); o <= orderOf(z.rackEnd); o++)
-          for (const d of (LAB_RACKS.racks['A' + o]?.devices || [])) {
+          for (const d of (labData.racks['A' + o]?.devices || [])) {
             if (d.color !== NODE_COLOR || /OMC|FMT/i.test(d.name)) continue;   // sub-shelves aren't nodes
             const p = devPos.get(d.name); if (p) nodes.push(p);
           }
@@ -1328,7 +1398,7 @@
     }
     buildTable();
     placeChairs();
-    buildLab();
+    let labGroup = buildLab(remapLabRacks(RACK_LAYOUTS[rackLayoutIdx]));
     buildRightRoom();
     buildConfScreen();
     buildCeilingLights();
@@ -1470,6 +1540,61 @@
       setSpotlightMode(on);                                 // darken / restore the laser backdrop
       setTileState(fiberTile, on, on ? 'On' : 'Off');
     }
+    // Rack Layout: rebuild the lab with front-row option `i` (see RACK_LAYOUTS). Lighting
+    // modes are reset first, then everything the old lab registered in the shared lists
+    // (area lights, downlights, rings, fat-line materials) is dropped before the rebuild.
+    // Spotlight / Fiber Ring are re-applied afterwards, so you can watch them move.
+    function setRackLayout(i) {
+      if (demoOn) setDemoMode(false);
+      const keepRing = fiberRingOn, keepSpot = spotlightOn && !fiberRingOn;
+      if (fiberRingOn) setFiberRing(false);
+      if (spotlightOn) setSpotlightMode(false);
+      const objs = new Set(), mats = new Set();
+      labGroup.traverse(o => {
+        objs.add(o);
+        for (const m of [].concat(o.material || [])) mats.add(m);
+      });
+      const prune = (arr, keep) => { const k = arr.filter(keep); arr.length = 0; arr.push(...k); };
+      prune(labAreaLights, l => !objs.has(l));
+      prune(sectionDownlights, l => !objs.has(l));
+      prune(fiberRings, r => !objs.has(r));
+      prune(fiberMats, m => !mats.has(m));
+      prune(fiberRingMats, m => !mats.has(m));
+      root.remove(labGroup);
+      labGroup.traverse(o => o.geometry?.dispose());
+      const sharedMats = new Set([...devMatCache.values(), devEdgeMat, ...Object.values(mat)]);
+      for (const m of mats) {                                // shared device/scene materials stay
+        if (sharedMats.has(m)) continue;
+        m.map?.dispose(); m.dispose();
+      }
+      rackLayoutIdx = i;
+      labGroup = buildLab(remapLabRacks(RACK_LAYOUTS[i]));
+      updateLayoutBar();
+      if (keepRing) setFiberRing(true); else if (keepSpot) setSpotlightMode(true);
+      const url = new URL(location.href);
+      if (i) url.searchParams.set('layout', i); else url.searchParams.delete('layout');
+      history.replaceState(null, '', url);
+    }
+    // 2D layout bar: ‹ / › and the dots step through RACK_LAYOUTS; ← / → keys do the same.
+    const layoutBar = document.getElementById('layout-bar');
+    const layoutDots = RACK_LAYOUTS.map((L, i) => {
+      const d = document.createElement('button');
+      d.className = 'dot'; d.title = L.name; d.setAttribute('aria-label', L.name);
+      d.addEventListener('click', () => { if (i !== rackLayoutIdx) setRackLayout(i); });
+      layoutBar.querySelector('.dots').appendChild(d);
+      return d;
+    });
+    function updateLayoutBar() {
+      const L = RACK_LAYOUTS[rackLayoutIdx];
+      layoutBar.querySelector('.name').textContent = `${rackLayoutIdx + 1} / ${RACK_LAYOUTS.length} · ${L.name}`;
+      layoutBar.querySelector('.desc').textContent = L.desc;
+      layoutDots.forEach((d, i) => d.classList.toggle('on', i === rackLayoutIdx));
+    }
+    const stepLayout = (dir) =>
+      setRackLayout((rackLayoutIdx + dir + RACK_LAYOUTS.length) % RACK_LAYOUTS.length);
+    layoutBar.querySelectorAll('[data-step]').forEach(btn =>
+      btn.addEventListener('click', () => stepLayout(+btn.dataset.step)));
+    updateLayoutBar();
     function handleAction(action, tile) {
       if (action === 'conf-glass') {
         glassFrosted.near = !glassFrosted.near;
@@ -1495,6 +1620,8 @@
     });
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && overlay.classList.contains('open')) closeOverlay();
+      else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !overlay.classList.contains('open'))
+        stepLayout(e.key === 'ArrowLeft' ? -1 : 1);
     });
 
     // -----------------------------------------------------------------------
@@ -1546,7 +1673,7 @@
     // Expose for debugging / tweaking from the console.
     window.EBC = { scene, camera, renderer, controls, CONFIG, mat, root, THREE,
                    nearWall, farWall, ipadGroup, setGlassFrosted, openOverlay,
-                   setRoomLightsOn, setDemoMode, setSpotlightMode, setFiberRing };
+                   setRoomLightsOn, setDemoMode, setSpotlightMode, setFiberRing, setRackLayout };
   </script>
 </body>
 </html>

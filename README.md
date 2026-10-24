@@ -35,6 +35,25 @@ python3 -m http.server 8000   # then open http://localhost:8000
 # or:  npx serve .
 ```
 
+## Rack layout options
+
+Alternative front-row arrangements, all with the **RLS centred**. Step through them live
+with the **‹ / ›** bar at the bottom of the screen (or the ← / → keys), or link straight to one.
+Spotlight and Fiber Ring stay on across a switch, so you can watch them move:
+
+| Layout | Front row (A1 → A10) | Link |
+| --- | --- | --- |
+| Current | TDM · RLS · ELS · 6500 · Outdoor | `?layout=0` |
+| Option 1, optical core | TDM · 6500 · **RLS** · ELS · Outdoor | `?layout=1` |
+| Option 2, edge → core | Outdoor · TDM · ELS · **RLS** · 6500 | `?layout=2` |
+| Option 3, aggregation left | ELS · Outdoor · TDM · **RLS** · 6500 | `?layout=3` |
+
+Racks never move; whole sections (devices, signs, placards, fibers, fiber ring) move
+between them. In every option the RLS / Converged Metro section is on A5–A7, the most
+central three racks (A6 sits ~7.5" right of the conference-table axis).
+The options live in `RACK_LAYOUTS` in `index.html`,
+outside the generated `LAB-RACKS` block, so regenerating the inventory keeps them.
+
 ## Customising
 
 Everything is parametric. Open `index.html` and edit the `CONFIG` block near the top
