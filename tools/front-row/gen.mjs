@@ -8,7 +8,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { OPTIONS, RACKS, RACK_U, PRODUCTS, PLACARD_U } from './options.mjs';
+import { OPTIONS, RACKS, RACK_U, PRODUCTS, PLACARD_U, UNITS } from './options.mjs';
 import { usage } from './layout.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -30,6 +30,7 @@ const FAMILY = {      // fill, label
   fmt:      ['#4b5563', 'FMT'],
 };
 const AMBER = '#f6a623';
+const ROLE = { Terminal: '#0056b4', Amp: '#c2410c', 'RLS-300': '#4b5563' };   // node-sign tag colours
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const rackX = (i) => PAD + SCALE_W + i * (RACK_W + GAP);
@@ -91,6 +92,20 @@ function svg(opt) {
     parts.push(deviceLabel(it.product, x, y, w, hh));
   }
 
+  // Node name signs (1U, just below each node): name, then a terminal / amp tag. A bracket on
+  // the left groups the node's parts with its sign.
+  for (const sg of p.signs || []) {
+    const role = UNITS[sg.unit].role, i = RACKS.indexOf(sg.rack);
+    const x = rackX(i) + 4, y = uY(sg.u) + 0.5, w = RACK_W - 8, hh = UH - 1, tagW = 50;
+    parts.push(`<rect x="${x}" y="${y}" width="${w}" height="${hh}" rx="2" fill="#f3f6fa"/>`);
+    parts.push(text(x + (w - tagW) / 2, y + hh / 2, sg.unit, { size: 9, weight: 700, fill: '#0b2a4f' }));
+    parts.push(`<rect x="${x + w - tagW}" y="${y}" width="${tagW}" height="${hh}" rx="2" fill="${ROLE[role]}"/>`);
+    parts.push(text(x + w - tagW / 2, y + hh / 2, role.toUpperCase(), { size: 7.5, weight: 800 }));
+    const unitItems = p.items.filter(it => it.unit === sg.unit);
+    const top = Math.max(...unitItems.map(it => it.u + PRODUCTS[it.product][0] - 1));
+    parts.push(`<path d="M${x - 1.5} ${uY(top) + 1} h-1.5 V${y + hh} h1.5" fill="none" stroke="${ROLE[role]}" stroke-width="1.5"/>`);
+  }
+
   // Zone placards (3U), one panel across the racks they span.
   for (const z of p.placards) {
     const i = RACKS.indexOf(z.rack), x = rackX(i) - 1, w = z.span * RACK_W + (z.span - 1) * GAP + 2;
@@ -108,6 +123,12 @@ function svg(opt) {
     parts.push(text(lx + 18, LEGEND_Y, FAMILY[f][1], { size: 11, fill: '#cdd8e3', anchor: 'start' }));
     lx += 36 + FAMILY[f][1].length * 6.6;
   }
+  for (const role of Object.keys(ROLE).filter(r => (p.signs || []).some(sg => UNITS[sg.unit].role === r))) {
+    const label = role === 'RLS-300' ? 'RLS-300 node sign' : `Ring ${role.toLowerCase()} sign`;
+    parts.push(`<rect x="${lx}" y="${LEGEND_Y - 6}" width="12" height="12" rx="2" fill="${ROLE[role]}"/>`);
+    parts.push(text(lx + 18, LEGEND_Y, label, { size: 11, fill: '#cdd8e3', anchor: 'start' }));
+    lx += 36 + label.length * 6.6;
+  }
   if (p.reserved.length) {
     parts.push(`<rect x="${lx}" y="${LEGEND_Y - 6}" width="12" height="12" fill="none" stroke="${AMBER}" stroke-dasharray="3 2"/>`);
     parts.push(text(lx + 18, LEGEND_Y, 'Reserved space', { size: 11, fill: '#cdd8e3', anchor: 'start' }));
@@ -122,7 +143,7 @@ function page() {
     const use = usage(opt.plan);
     const rows = RACKS.map(r => {
       const u = use[r];
-      return `<tr><th>${r}</th><td>${u.devices}</td><td>${u.placards}</td><td>${u.reserved || ''}</td>` +
+      return `<tr><th>${r}</th><td>${u.devices}</td><td>${u.placards}</td><td>${u.signs || ''}</td><td>${u.reserved || ''}</td>` +
         `<td><b>${u.used}</b></td><td><b>${u.free}</b></td><td class="ranges">${esc(u.freeRanges.join(', ') || 'none')}</td></tr>`;
     }).join('\n');
     const total = RACKS.reduce((n, r) => n + use[r].used, 0);
@@ -141,11 +162,11 @@ function page() {
     <div>
       <h3>U used and free per rack</h3>
       <table>
-        <thead><tr><th>Rack</th><th>Devices</th><th>Placards</th><th>Reserved</th><th>Used</th><th>Free</th><th>Free U</th></tr></thead>
+        <thead><tr><th>Rack</th><th>Devices</th><th>Placards</th><th>Node signs</th><th>Reserved</th><th>Used</th><th>Free</th><th>Free U</th></tr></thead>
         <tbody>
 ${rows}
         </tbody>
-        <tfoot><tr><th>Row</th><td colspan="3"></td><td><b>${total}</b></td><td><b>${RACKS.length * RACK_U - total}</b></td><td>of ${RACKS.length * RACK_U}U</td></tr></tfoot>
+        <tfoot><tr><th>Row</th><td colspan="4"></td><td><b>${total}</b></td><td><b>${RACKS.length * RACK_U - total}</b></td><td>of ${RACKS.length * RACK_U}U</td></tr></tfoot>
       </table>
     </div>
   </div>
@@ -198,7 +219,8 @@ ${rows}
   <div class="sub">EXECUTIVE BRIEFING CENTER</div>
   <h1>Front-row options, racks A1–A10</h1>
   <p class="note">Ten 19" racks, 58U each, U1 at the bottom. Every option places the same ${OPTIONS[0].plan.items.length} devices as today's plan, each once, at true U height;
-  zone placards are 3U. U used counts devices, placards and reserved space. These are separate from the rack layouts in the
+  zone placards are 3U. The RLS and 6500 rings are 5 nodes each (3 terminals, 2 amps); every node stays whole in one rack
+  with a 1U name sign just below it, tagged terminal or amp. U used counts devices, placards, node signs and reserved space. These are separate from the rack layouts in the
   <a href="../">3D scene</a>'s ‹ / › switcher, which only move whole sections between racks.</p>
   <div class="preferred">Preferred option: TBD</div>
   <nav>${nav}</nav>

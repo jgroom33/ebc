@@ -49,8 +49,9 @@ stay on across a switch, so you can watch them move:
 | Option 3, Portfolio Vertical Slices | One rack each: Access+TDM · Aggregation · Converged Metro · ELS · 6500 · RLS · Waveserver | `?layout=3` |
 
 Each option places every front-row device and 3U zone sign at its own rack and U; the back
-row (B2–B8) never changes. Fibers, fiber rings and the RLS name placards follow their
-devices. The **Front-row elevation ›** link at the top right opens the current option's
+row (B2–B8) never changes. The RLS and 6500 rings are 5 nodes each (3 terminals, 2 amps):
+every node stays whole in one rack (its OMCs and FMT with it) with a 1U name sign just below
+it, tagged **TERMINAL** or **AMP**. Fibers and fiber rings follow their devices. The **Front-row elevation ›** link at the top right opens the current option's
 flat elevation.
 
 ## Front-row elevations
@@ -60,15 +61,18 @@ The layouts live in `tools/front-row/options.mjs`, the single source for both th
 comparison page (story, U used/free per rack, room to grow, trade-offs). After changing them:
 
 ```bash
-node tools/front-row/check.mjs   # every device placed once, no overlaps, every rack <= 58U
+node tools/front-row/check.mjs   # every device placed once, no overlaps, every rack <= 58U,
+                                 # every node whole, in order, in one rack, with its sign
+node tools/front-row/check.mjs --selftest   # proves the check catches broken layouts
 node tools/front-row/gen.mjs     # redraw front-row/*.svg and front-row/index.html
 ```
 
 ## Lab rack data
 
-The racks, zone signs, fiber rings and RLS name plates are baked into `index.html` from the
+The racks, fiber rings and fibers are baked into `index.html` from the
 EBC layout in the [na-sales-lab](https://github.com/ciena-corp/na-sales-lab) inventory YAML
-(`provisioner/inventory/`). To refresh after an inventory change:
+(`provisioner/inventory/`); front-row positions, zone signs and node signs come from
+`tools/front-row/options.mjs`. To refresh after an inventory change:
 
 ```bash
 node tools/gen-rack-layout.mjs        # fetches ../lab and reads origin/main

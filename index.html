@@ -300,7 +300,7 @@
     import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
     import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
     import { OPTIONS as FRONT_ROW_OPTIONS, TODAY as FRONT_ROW_TODAY, RACKS as FRONT_RACKS,
-             PLACARD_U, height as productU } from './tools/front-row/options.mjs';
+             PLACARD_U, UNITS as FRONT_ROW_UNITS, height as productU } from './tools/front-row/options.mjs';
 
     // -----------------------------------------------------------------------
     // Units & configuration  (internal units = metres; defaults given in feet)
@@ -702,29 +702,35 @@
     const RACK_LAYOUTS = FRONT_ROW_OPTIONS;
 
     // The baked front-row devices are today's plan: match each to its options.mjs entry by
-    // rack + U, giving per-product queues of named devices (in TODAY order). An option takes
-    // the k-th device of a product for its k-th entry of that product, so fibers, rings and
-    // name placards (all keyed by device name) follow the devices into the new layout.
-    const frontDevicesByProduct = (() => {
-      const q = new Map();
+    // rack + U. Devices in a unit (a ring node with its OMCs/FMT, an RLS-300 node, a D7 + FMT)
+    // are keyed by unit + part index, so a node keeps its own named parts; the rest go in
+    // per-product queues (in TODAY order) and an option takes the k-th device of a product for
+    // its k-th loose entry of it. Fibers and rings (keyed by device name) follow the devices.
+    const frontDeviceOf = (() => {
+      const byUnit = new Map(), byProduct = new Map(), seen = {};
       for (const it of FRONT_ROW_TODAY.items) {
-        const d = LAB_RACKS.racks[it.rack]?.devices.find(dv => dv.ru === it.u && dv.h === productU(it.product));
-        if (!d) console.warn(`front row: no baked device for ${it.product} at ${it.rack} U${it.u}`);
-        if (!q.has(it.product)) q.set(it.product, []);
-        q.get(it.product).push(d || { name: `${it.product} ${it.rack} U${it.u}`, state: 'planned' });
+        const d = LAB_RACKS.racks[it.rack]?.devices.find(dv => dv.ru === it.u && dv.h === productU(it.product))
+          || (console.warn(`front row: no baked device for ${it.product} at ${it.rack} U${it.u}`),
+              { name: `${it.product} ${it.rack} U${it.u}`, state: 'planned' });
+        if (it.unit) byUnit.set(`${it.unit}#${seen[it.unit] = (seen[it.unit] ?? -1) + 1}`, d);
+        else { if (!byProduct.has(it.product)) byProduct.set(it.product, []); byProduct.get(it.product).push(d); }
       }
-      return q;
+      return { byUnit, byProduct };
     })();
 
     // LAB_RACKS with the front row laid out per `layout` (an options.mjs option).
     function frontRowLabData(layout) {
-      const { items, placards: zonePlacards, reserved } = layout.plan;
+      const { items, placards: zonePlacards, reserved, signs } = layout.plan;
       const racks = {};
       for (const [id, rk] of Object.entries(LAB_RACKS.racks))
         racks[id] = rk.row === 'front' ? { ...rk, devices: [], reserved: [] } : rk;
-      const queues = new Map([...frontDevicesByProduct].map(([p, ds]) => [p, [...ds]]));
-      for (const it of items) {
-        const d = queues.get(it.product).shift();
+      const queues = new Map([...frontDeviceOf.byProduct].map(([p, ds]) => [p, [...ds]]));
+      const partIdx = {};
+      // Unit parts in top-down order, so part k of a unit maps to part k of today's unit.
+      for (const it of [...items].sort((a, b) => b.u - a.u)) {
+        const d = it.unit
+          ? frontDeviceOf.byUnit.get(`${it.unit}#${partIdx[it.unit] = (partIdx[it.unit] ?? -1) + 1}`)
+          : queues.get(it.product).shift();
         racks[it.rack].devices.push({ name: d.name, ru: it.u, h: productU(it.product), state: d.state });
       }
       for (const r of reserved) racks[r.rack].reserved.push({ ru: r.u, h: r.h, label: r.label });
@@ -732,30 +738,9 @@
         rackStart: z.rack, rackEnd: FRONT_RACKS[FRONT_RACKS.indexOf(z.rack) + z.span - 1],
         label: z.label, ru: z.u, h: PLACARD_U,
       }));
-      // Name placards: re-pick a free U next to each node's new position (below, else above,
-      // else on the shelf), clear of devices, zone placards, reserved space and other plates.
-      const occ = {};
-      const mark = (rack, ru, h) => { for (let u = ru; u < ru + h; u++) (occ[rack] ||= new Set()).add(u); };
-      for (const [id, rk] of Object.entries(racks)) {
-        for (const d of rk.devices) mark(id, d.ru, d.h);
-        for (const r of rk.reserved || []) mark(id, r.ru, r.h);
-      }
-      for (const z of zones)
-        for (let i = FRONT_RACKS.indexOf(z.rackStart); i <= FRONT_RACKS.indexOf(z.rackEnd); i++) mark(FRONT_RACKS[i], z.ru, z.h);
-      const placards = [];
-      for (const pl of LAB_RACKS.placards || []) {
-        const rack = Object.keys(racks).find(id => racks[id].devices.some(d => d.name === pl.name));
-        if (!rack) continue;
-        const d = racks[rack].devices.find(dv => dv.name === pl.name), used = occ[rack] || new Set();
-        const below = d.ru - 1, above = d.ru + d.h;
-        let ru, position;
-        if (below >= 1 && !used.has(below)) { ru = below; position = 'below'; }
-        else if (above <= RACK_U && !used.has(above)) { ru = above; position = 'above'; }
-        else { ru = d.ru + d.h - 1; position = 'inside'; }
-        mark(rack, ru, 1);
-        placards.push({ ...pl, rack, ru, position });
-      }
-      return { racks, zones, fibers: LAB_RACKS.fibers, rings: LAB_RACKS.rings, placards };
+      // Node name signs: the 1U just below each node, tagged terminal / amp (options.mjs).
+      const nodeSigns = (signs || []).map(sg => ({ unit: sg.unit, role: FRONT_ROW_UNITS[sg.unit].role, rack: sg.rack, ru: sg.u }));
+      return { racks, zones, fibers: LAB_RACKS.fibers, rings: LAB_RACKS.rings, nodeSigns };
     }
     const layoutParam = parseInt(new URLSearchParams(location.search).get('layout'), 10);
     let rackLayoutIdx = (layoutParam >= 0 && layoutParam < RACK_LAYOUTS.length) ? layoutParam : 0;
@@ -831,6 +816,25 @@
       tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
       return new THREE.Mesh(new THREE.PlaneGeometry(wM, hM),
         new THREE.MeshBasicMaterial({ map: tex }));                // opaque (no transparent flag)
+    }
+
+    // Node name sign: dark plate (it sits between light-gray shelves) with the node name, and a coloured role tag on the right
+    // (blue TERMINAL, orange AMP, gray RLS-300) — the same look as the SVG elevations.
+    const ROLE_COLOR = { Terminal: '#0056b4', Amp: '#c2410c', 'RLS-300': '#4b5563' };
+    function makeNodeSign(name, role, wM, hM) {
+      const cv = document.createElement('canvas');
+      cv.height = 96; cv.width = Math.min(4096, Math.round(96 * wM / hM));
+      const ctx = cv.getContext('2d'), W = cv.width, Hc = cv.height, tagW = W * 0.36;
+      ctx.fillStyle = '#1b2838'; ctx.fillRect(0, 0, W, Hc);
+      ctx.fillStyle = ROLE_COLOR[role] || '#4b5563'; ctx.fillRect(W - tagW, 0, tagW, Hc);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffffff'; ctx.font = '800 66px "Segoe UI", Arial, sans-serif';
+      ctx.fillText(name, (W - tagW) / 2, Hc / 2 + 3);
+      ctx.fillStyle = '#ffffff'; ctx.font = '800 50px "Segoe UI", Arial, sans-serif';
+      ctx.fillText(role.toUpperCase(), W - tagW / 2, Hc / 2 + 3);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+      return new THREE.Mesh(new THREE.PlaneGeometry(wM, hM), new THREE.MeshBasicMaterial({ map: tex }));
     }
 
     // Reserved rack space: opaque dark plate, dashed amber border, amber text ('A: B' → 2 lines).
@@ -1098,18 +1102,16 @@
         }
       }
 
-      // Name placards: a small opaque plate (section-sign style) on the rack face for each
-      // RLS node (the generator's PLACARD_FAMILIES), in the free RU next to
-      // its shelf — frontRowLabData has already picked the RU (below, else above, else on the
-      // shelf). Opaque so it survives the glass transmission pass like the section signs.
-      for (const pl of (labData.placards || [])) {
-        const rk = labData.racks[pl.rack];
+      // Node name signs: a 1U opaque plate on the rack face just below each RLS / 6500 ring node
+      // (and the RLS-300 pair) — the node name plus a TERMINAL / AMP tag, so each ring reads as
+      // 3 terminals + 2 amps. Opaque so it survives the glass transmission pass like the signs.
+      for (const ns of (labData.nodeSigns || [])) {
+        const rk = labData.racks[ns.rack];
         if (!rk) continue;
         const x = xOfOrder(rk.order), z = rk.row === 'back' ? backRackZ : frontRackZ;
-        const hM = 0.8 * U_M, wM = 11 * IN;
-        const plate = makeBigLabel(pl.label, wM, hM);
-        plate.position.set(x, RACK_PLINTH + (pl.ru - 1 + 0.5) * U_M, z + DEV_FRONT + 0.9 * IN);
-        plate.name = `Placard:${pl.name}`;
+        const plate = makeNodeSign(ns.unit, ns.role, 19 * IN, U_M - 0.18 * IN);
+        plate.position.set(x, RACK_PLINTH + (ns.ru - 1 + 0.5) * U_M, z + DEV_FRONT);
+        plate.name = `NodeSign:${ns.unit}`;
         g.add(plate);
       }
 

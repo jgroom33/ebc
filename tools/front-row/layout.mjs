@@ -1,8 +1,8 @@
 // Shared occupancy maths for the front-row elevations: what fills each U of each rack.
-import { RACKS, RACK_U, PLACARD_U, height } from './options.mjs';
+import { RACKS, RACK_U, PLACARD_U, height, signLabel } from './options.mjs';
 
 // Every occupied block of one option, per rack: devices, placards (one block in each rack
-// they span) and reserved space. { kind, label, u, h }.
+// they span), node name signs (1U) and reserved space. { kind, label, u, h }.
 export function blocks(plan) {
   const out = Object.fromEntries(RACKS.map(r => [r, []]));
   for (const it of plan.items) out[it.rack].push({ kind: 'device', label: it.product, u: it.u, h: height(it.product) });
@@ -15,17 +15,18 @@ export function blocks(plan) {
     }
   }
   for (const r of plan.reserved) out[r.rack].push({ kind: 'reserved', label: r.label, u: r.u, h: r.h });
+  for (const sg of plan.signs || []) out[sg.rack].push({ kind: 'sign', label: signLabel(sg.unit), u: sg.u, h: 1 });
   return out;
 }
 
-// U used / free per rack. Reserved space counts as used (it is spoken for).
+// U used / free per rack. Signs and reserved space count as used (they are spoken for).
 export function usage(plan) {
   const res = {};
   for (const [rack, bs] of Object.entries(blocks(plan))) {
     const sum = (k) => bs.filter(b => b.kind === k).reduce((n, b) => n + b.h, 0);
-    const devices = sum('device'), placards = sum('placard'), reserved = sum('reserved');
-    const used = devices + placards + reserved;
-    res[rack] = { devices, placards, reserved, used, free: RACK_U - used, freeRanges: freeRanges(bs) };
+    const devices = sum('device'), placards = sum('placard'), reserved = sum('reserved'), signs = sum('sign');
+    const used = devices + placards + reserved + signs;
+    res[rack] = { devices, placards, signs, reserved, used, free: RACK_U - used, freeRanges: freeRanges(bs) };
   }
   return res;
 }
