@@ -42,19 +42,23 @@
   <div class="logo">CIENA</div>
   <div class="sub">EXECUTIVE BRIEFING CENTER</div>
   <h1>Front-row options, racks A1–A10</h1>
-  <p class="note">Ten 19" racks, 58U each, U1 at the bottom. Every option places the same 83 devices as today's plan, each once, at true U height;
-  zone placards are 3U. The RLS and 6500 rings are 5 nodes each (3 terminals, 2 amps); every node stays whole in one rack
-  with a 1U name sign just below it, tagged terminal or amp. U used counts devices, placards, node signs and reserved space. These are separate from the rack layouts in the
-  <a href="../">3D scene</a>'s ‹ / › switcher, which only move whole sections between racks.</p>
+  <p class="note">Ten 19" racks, 58U each, U1 at the bottom. Every option places the same 83 devices as today's plan, each once, at true U height.
+  Each zone has a 3U placard position; its sign is drawn as the 3D scene draws it, filling the clear space above that
+  position (up to 9U), so a sign shrinks as gear is added under it. DCOM and Outdoor stay in A10 in Options 4–6; Options 2 and 3 move their rack to A1 and A3.
+  The RLS and 6500 rings are 5 nodes each (3 terminals, 2 amps); every node stays whole in one rack with a 1U name sign
+  just below it, tagged terminal or amp. U used counts devices, 3U placards, node signs and reserved space.</p>
+  <p class="note">These are the seven layouts of the <a href="../">3D scene</a>'s ‹ / › bar, in its order (<code>?layout=0..6</code>).
+  Current is today's plan. Options 1–3 move whole sections of it between racks, nothing inside a rack moves; Options 4–6
+  re-place individual devices.</p>
   <div class="preferred">Preferred option: TBD</div>
-  <nav><a href="#option-0-today">Reference</a> · <a href="#option-1-access-to-core">Access to Core</a> · <a href="#option-2-photonic-center">Photonic center</a> · <a href="#option-3-vertical-slices">Vertical slices</a></nav>
+  <nav><a href="#option-0-current">Current</a> · <a href="#option-1-optical-core">Optical core</a> · <a href="#option-2-edge-to-core">Edge → core</a> · <a href="#option-3-aggregation-left">Aggregation left</a> · <a href="#option-4-access-to-core">Access to Core</a> · <a href="#option-5-photonic-center">Photonic center</a> · <a href="#option-6-vertical-slices">Vertical slices</a></nav>
 
-<section id="option-0-today">
-  <h2>Today's plan</h2>
-  <a class="elev" href="option-0-today.svg"><img src="option-0-today.svg" alt="Today's plan front elevation, racks A1 to A10" loading="lazy"></a>
+<section id="option-0-current">
+  <h2>Current (today's plan)</h2>
+  <a class="elev" href="option-0-current.svg"><img src="option-0-current.svg" alt="Current (today's plan) front elevation, racks A1 to A10" loading="lazy"></a>
   <div class="cols">
     <div>
-      <h3>The story, left to right</h3><ul><li>A1: Access on top, TDM underneath.</li><li>A2–A4: Converged Metro on top, RLS underneath.</li><li>A5–A6: Aggregation on top, ELS underneath.</li><li>A7–A9: Datacenter Interconnect on top, 6500 underneath.</li><li>A10: Outdoor.</li></ul>
+      <h3>The story, left to right</h3><ul><li>A1: Access on top, TDM underneath.</li><li>A2–A4: Converged Metro on top, RLS underneath.</li><li>A5–A6: Aggregation on top, ELS underneath.</li><li>A7–A9: Datacenter Interconnect on top, 6500 underneath.</li><li>A10: DCOM and Outdoor.</li></ul>
       
       <h3>Room to grow</h3><ul><li>More 8100s: Converged Metro (A2–A4) has U30–U34 free under each 8192, plus U42–U47 in A3 and U43–U47 in A4.</li><li>More 5164s: Aggregation (A5–A6) has U30–U38 free under each 5130.</li><li>Waveserver E-Series: no space is set aside. A7 and A9 have U30–U39 free under the WSAi.</li></ul>
       <h3>Trade-offs</h3><ul><li>Packet and optical share every rack, so no rack tells one story top to bottom.</li><li>Aggregation (A5–A6) sits right of Converged Metro (A2–A4), so walking left to right the packet story goes access, metro, aggregation: out of order.</li><li>The 6500 photonic and services shelves are mixed across A7–A9, and neither ring reads in ring order: the RLS nodes jump between A2, A3 and A4, and the 6500 nodes between A7, A8 and A9.</li></ul>
@@ -73,20 +77,116 @@
 <tr><th>A7</th><td>16</td><td>6</td><td>1</td><td></td><td><b>23</b></td><td><b>35</b></td><td class="ranges">U1–U10, U26, U30–U39, U41, U43–U47, U51–U58</td></tr>
 <tr><th>A8</th><td>20</td><td>6</td><td>2</td><td></td><td><b>28</b></td><td><b>30</b></td><td class="ranges">U1–U3, U26, U30–U47, U51–U58</td></tr>
 <tr><th>A9</th><td>16</td><td>6</td><td>2</td><td></td><td><b>24</b></td><td><b>34</b></td><td class="ranges">U1–U9, U26, U30–U39, U41, U43–U47, U51–U58</td></tr>
-<tr><th>A10</th><td>0</td><td>3</td><td></td><td></td><td><b>3</b></td><td><b>55</b></td><td class="ranges">U1–U47, U51–U58</td></tr>
+<tr><th>A10</th><td>0</td><td>6</td><td></td><td></td><td><b>6</b></td><td><b>52</b></td><td class="ranges">U1–U31, U35–U47, U51–U58</td></tr>
         </tbody>
-        <tfoot><tr><th>Row</th><td colspan="4"></td><td><b>218</b></td><td><b>362</b></td><td>of 580U</td></tr></tfoot>
+        <tfoot><tr><th>Row</th><td colspan="4"></td><td><b>221</b></td><td><b>359</b></td><td>of 580U</td></tr></tfoot>
       </table>
     </div>
   </div>
 </section>
 
-<section id="option-1-access-to-core">
-  <h2>Option 1: Access to Core</h2>
-  <a class="elev" href="option-1-access-to-core.svg"><img src="option-1-access-to-core.svg" alt="Option 1: Access to Core front elevation, racks A1 to A10" loading="lazy"></a>
+<section id="option-1-optical-core">
+  <h2>Option 1: Optical core</h2>
+  <a class="elev" href="option-1-optical-core.svg"><img src="option-1-optical-core.svg" alt="Option 1: Optical core front elevation, racks A1 to A10" loading="lazy"></a>
   <div class="cols">
     <div>
-      <h3>The story, left to right</h3><ul><li>Top band, left to right: Access (A1), TDM (A2), Aggregation (A3–A4), Converged Metro (A5–A8), Datacenter Interconnect (A9).</li><li>Optical layers stacked under it, top to bottom: ELS (A1–A4); 6500 (A2–A8), one ring node per rack in ring order: Canyon, Wind, Peak, Mountain, Breeze, then the two D7 services shelves; RLS (A3–A9), one ring node per rack in ring order: Americas, Atlantic, Europe, Asia, Pacific, then Downtown and Uptown.</li><li>A10: Outdoor.</li></ul>
+      <h3>The story, left to right</h3><ul><li>Whole sections of today's plan move between racks; nothing inside a rack moves.</li><li>A1: Access over TDM. A2–A4: Datacenter Interconnect over 6500. A5–A7: Converged Metro over RLS, the central three racks. A8–A9: Aggregation over ELS.</li><li>A10: DCOM and Outdoor.</li></ul>
+      
+      <h3>Room to grow</h3><ul><li>More 8100s: Converged Metro (A5–A7) has U30–U34 free under each 8192, plus U42–U47 in A6 and U43–U47 in A7.</li><li>More 5164s: Aggregation (A8–A9) has U30–U38 free under each 5130.</li><li>Waveserver E-Series: no space is set aside. A2 and A4 have U30–U39 free under the WSAi.</li></ul>
+      <h3>Trade-offs</h3><ul><li>The optical core (6500, RLS) sits in the middle of the row, with RLS on the central racks.</li><li>Packet and optical still share every rack, and the packet story reads access, DCI, metro, aggregation: out of order.</li><li>Neither ring reads in ring order: RLS nodes jump between A5, A6 and A7, and 6500 nodes between A2, A3 and A4.</li></ul>
+    </div>
+    <div>
+      <h3>U used and free per rack</h3>
+      <table>
+        <thead><tr><th>Rack</th><th>Devices</th><th>Placards</th><th>Node signs</th><th>Reserved</th><th>Used</th><th>Free</th><th>Free U</th></tr></thead>
+        <tbody>
+<tr><th>A1</th><td>12</td><td>6</td><td></td><td></td><td><b>18</b></td><td><b>40</b></td><td class="ranges">U1–U18, U23–U26, U30–U37, U46–U47, U51–U58</td></tr>
+<tr><th>A2</th><td>16</td><td>6</td><td>1</td><td></td><td><b>23</b></td><td><b>35</b></td><td class="ranges">U1–U10, U26, U30–U39, U41, U43–U47, U51–U58</td></tr>
+<tr><th>A3</th><td>20</td><td>6</td><td>2</td><td></td><td><b>28</b></td><td><b>30</b></td><td class="ranges">U1–U3, U26, U30–U47, U51–U58</td></tr>
+<tr><th>A4</th><td>16</td><td>6</td><td>2</td><td></td><td><b>24</b></td><td><b>34</b></td><td class="ranges">U1–U9, U26, U30–U39, U41, U43–U47, U51–U58</td></tr>
+<tr><th>A5</th><td>22</td><td>6</td><td>2</td><td></td><td><b>30</b></td><td><b>28</b></td><td class="ranges">U1–U9, U14–U17, U30–U34, U46–U47, U51–U58</td></tr>
+<tr><th>A6</th><td>16</td><td>6</td><td>3</td><td></td><td><b>25</b></td><td><b>33</b></td><td class="ranges">U1–U8, U17–U19, U24–U26, U30–U34, U42–U47, U51–U58</td></tr>
+<tr><th>A7</th><td>21</td><td>6</td><td>2</td><td></td><td><b>29</b></td><td><b>29</b></td><td class="ranges">U1–U7, U15–U17, U26, U30–U34, U43–U47, U51–U58</td></tr>
+<tr><th>A8</th><td>13</td><td>6</td><td></td><td></td><td><b>19</b></td><td><b>39</b></td><td class="ranges">U1–U12, U15, U17–U20, U23, U25–U26, U30–U38, U46–U47, U51–U58</td></tr>
+<tr><th>A9</th><td>13</td><td>6</td><td></td><td></td><td><b>19</b></td><td><b>39</b></td><td class="ranges">U1–U12, U15, U17–U20, U23, U25–U26, U30–U38, U46–U47, U51–U58</td></tr>
+<tr><th>A10</th><td>0</td><td>6</td><td></td><td></td><td><b>6</b></td><td><b>52</b></td><td class="ranges">U1–U31, U35–U47, U51–U58</td></tr>
+        </tbody>
+        <tfoot><tr><th>Row</th><td colspan="4"></td><td><b>221</b></td><td><b>359</b></td><td>of 580U</td></tr></tfoot>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="option-2-edge-to-core">
+  <h2>Option 2: Edge → core</h2>
+  <a class="elev" href="option-2-edge-to-core.svg"><img src="option-2-edge-to-core.svg" alt="Option 2: Edge → core front elevation, racks A1 to A10" loading="lazy"></a>
+  <div class="cols">
+    <div>
+      <h3>The story, left to right</h3><ul><li>Whole sections of today's plan move between racks; nothing inside a rack moves.</li><li>A1: DCOM and Outdoor. A2: Access over TDM. A3–A4: Aggregation over ELS. A5–A7: Converged Metro over RLS. A8–A10: Datacenter Interconnect over 6500.</li><li>DCOM and Outdoor move with their rack to A1, the edge end of the row.</li></ul>
+      
+      <h3>Room to grow</h3><ul><li>More 8100s: Converged Metro (A5–A7) has U30–U34 free under each 8192, plus U42–U47 in A6 and U43–U47 in A7.</li><li>More 5164s: Aggregation (A3–A4) has U30–U38 free under each 5130.</li><li>Waveserver E-Series: no space is set aside. A8 and A10 have U30–U39 free under the WSAi.</li></ul>
+      <h3>Trade-offs</h3><ul><li>The packet story reads in network order left to right: access, aggregation, metro, then DCI.</li><li>RLS is on the central racks (A5–A7); the 6500 is at the far right.</li><li>Packet and optical share every rack, and neither ring reads in ring order.</li></ul>
+    </div>
+    <div>
+      <h3>U used and free per rack</h3>
+      <table>
+        <thead><tr><th>Rack</th><th>Devices</th><th>Placards</th><th>Node signs</th><th>Reserved</th><th>Used</th><th>Free</th><th>Free U</th></tr></thead>
+        <tbody>
+<tr><th>A1</th><td>0</td><td>6</td><td></td><td></td><td><b>6</b></td><td><b>52</b></td><td class="ranges">U1–U31, U35–U47, U51–U58</td></tr>
+<tr><th>A2</th><td>12</td><td>6</td><td></td><td></td><td><b>18</b></td><td><b>40</b></td><td class="ranges">U1–U18, U23–U26, U30–U37, U46–U47, U51–U58</td></tr>
+<tr><th>A3</th><td>13</td><td>6</td><td></td><td></td><td><b>19</b></td><td><b>39</b></td><td class="ranges">U1–U12, U15, U17–U20, U23, U25–U26, U30–U38, U46–U47, U51–U58</td></tr>
+<tr><th>A4</th><td>13</td><td>6</td><td></td><td></td><td><b>19</b></td><td><b>39</b></td><td class="ranges">U1–U12, U15, U17–U20, U23, U25–U26, U30–U38, U46–U47, U51–U58</td></tr>
+<tr><th>A5</th><td>22</td><td>6</td><td>2</td><td></td><td><b>30</b></td><td><b>28</b></td><td class="ranges">U1–U9, U14–U17, U30–U34, U46–U47, U51–U58</td></tr>
+<tr><th>A6</th><td>16</td><td>6</td><td>3</td><td></td><td><b>25</b></td><td><b>33</b></td><td class="ranges">U1–U8, U17–U19, U24–U26, U30–U34, U42–U47, U51–U58</td></tr>
+<tr><th>A7</th><td>21</td><td>6</td><td>2</td><td></td><td><b>29</b></td><td><b>29</b></td><td class="ranges">U1–U7, U15–U17, U26, U30–U34, U43–U47, U51–U58</td></tr>
+<tr><th>A8</th><td>16</td><td>6</td><td>1</td><td></td><td><b>23</b></td><td><b>35</b></td><td class="ranges">U1–U10, U26, U30–U39, U41, U43–U47, U51–U58</td></tr>
+<tr><th>A9</th><td>20</td><td>6</td><td>2</td><td></td><td><b>28</b></td><td><b>30</b></td><td class="ranges">U1–U3, U26, U30–U47, U51–U58</td></tr>
+<tr><th>A10</th><td>16</td><td>6</td><td>2</td><td></td><td><b>24</b></td><td><b>34</b></td><td class="ranges">U1–U9, U26, U30–U39, U41, U43–U47, U51–U58</td></tr>
+        </tbody>
+        <tfoot><tr><th>Row</th><td colspan="4"></td><td><b>221</b></td><td><b>359</b></td><td>of 580U</td></tr></tfoot>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="option-3-aggregation-left">
+  <h2>Option 3: Aggregation left</h2>
+  <a class="elev" href="option-3-aggregation-left.svg"><img src="option-3-aggregation-left.svg" alt="Option 3: Aggregation left front elevation, racks A1 to A10" loading="lazy"></a>
+  <div class="cols">
+    <div>
+      <h3>The story, left to right</h3><ul><li>Whole sections of today's plan move between racks; nothing inside a rack moves.</li><li>A1–A2: Aggregation over ELS. A3: DCOM and Outdoor. A4: Access over TDM. A5–A7: Converged Metro over RLS. A8–A10: Datacenter Interconnect over 6500.</li><li>DCOM and Outdoor move with their rack to A3.</li></ul>
+      
+      <h3>Room to grow</h3><ul><li>More 8100s: Converged Metro (A5–A7) has U30–U34 free under each 8192, plus U42–U47 in A6 and U43–U47 in A7.</li><li>More 5164s: Aggregation (A1–A2) has U30–U38 free under each 5130.</li><li>Waveserver E-Series: no space is set aside. A8 and A10 have U30–U39 free under the WSAi.</li></ul>
+      <h3>Trade-offs</h3><ul><li>Aggregation and ELS open the row; RLS is on the central racks (A5–A7).</li><li>The near-empty DCOM/Outdoor rack (A3) splits the packet sections.</li><li>Packet and optical share every rack, and neither ring reads in ring order.</li></ul>
+    </div>
+    <div>
+      <h3>U used and free per rack</h3>
+      <table>
+        <thead><tr><th>Rack</th><th>Devices</th><th>Placards</th><th>Node signs</th><th>Reserved</th><th>Used</th><th>Free</th><th>Free U</th></tr></thead>
+        <tbody>
+<tr><th>A1</th><td>13</td><td>6</td><td></td><td></td><td><b>19</b></td><td><b>39</b></td><td class="ranges">U1–U12, U15, U17–U20, U23, U25–U26, U30–U38, U46–U47, U51–U58</td></tr>
+<tr><th>A2</th><td>13</td><td>6</td><td></td><td></td><td><b>19</b></td><td><b>39</b></td><td class="ranges">U1–U12, U15, U17–U20, U23, U25–U26, U30–U38, U46–U47, U51–U58</td></tr>
+<tr><th>A3</th><td>0</td><td>6</td><td></td><td></td><td><b>6</b></td><td><b>52</b></td><td class="ranges">U1–U31, U35–U47, U51–U58</td></tr>
+<tr><th>A4</th><td>12</td><td>6</td><td></td><td></td><td><b>18</b></td><td><b>40</b></td><td class="ranges">U1–U18, U23–U26, U30–U37, U46–U47, U51–U58</td></tr>
+<tr><th>A5</th><td>22</td><td>6</td><td>2</td><td></td><td><b>30</b></td><td><b>28</b></td><td class="ranges">U1–U9, U14–U17, U30–U34, U46–U47, U51–U58</td></tr>
+<tr><th>A6</th><td>16</td><td>6</td><td>3</td><td></td><td><b>25</b></td><td><b>33</b></td><td class="ranges">U1–U8, U17–U19, U24–U26, U30–U34, U42–U47, U51–U58</td></tr>
+<tr><th>A7</th><td>21</td><td>6</td><td>2</td><td></td><td><b>29</b></td><td><b>29</b></td><td class="ranges">U1–U7, U15–U17, U26, U30–U34, U43–U47, U51–U58</td></tr>
+<tr><th>A8</th><td>16</td><td>6</td><td>1</td><td></td><td><b>23</b></td><td><b>35</b></td><td class="ranges">U1–U10, U26, U30–U39, U41, U43–U47, U51–U58</td></tr>
+<tr><th>A9</th><td>20</td><td>6</td><td>2</td><td></td><td><b>28</b></td><td><b>30</b></td><td class="ranges">U1–U3, U26, U30–U47, U51–U58</td></tr>
+<tr><th>A10</th><td>16</td><td>6</td><td>2</td><td></td><td><b>24</b></td><td><b>34</b></td><td class="ranges">U1–U9, U26, U30–U39, U41, U43–U47, U51–U58</td></tr>
+        </tbody>
+        <tfoot><tr><th>Row</th><td colspan="4"></td><td><b>221</b></td><td><b>359</b></td><td>of 580U</td></tr></tfoot>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="option-4-access-to-core">
+  <h2>Option 4: Access to Core</h2>
+  <a class="elev" href="option-4-access-to-core.svg"><img src="option-4-access-to-core.svg" alt="Option 4: Access to Core front elevation, racks A1 to A10" loading="lazy"></a>
+  <div class="cols">
+    <div>
+      <h3>The story, left to right</h3><ul><li>Top band, left to right: Access (A1), TDM (A2), Aggregation (A3–A4), Converged Metro (A5–A8), Datacenter Interconnect (A9).</li><li>Optical layers stacked under it, top to bottom: ELS (A1–A4); 6500 (A2–A8), one ring node per rack in ring order: Canyon, Wind, Peak, Mountain, Breeze, then the two D7 services shelves; RLS (A3–A9), one ring node per rack in ring order: Americas, Atlantic, Europe, Asia, Pacific, then Downtown and Uptown.</li><li>A10: DCOM and Outdoor.</li></ul>
       <h3>Fit</h3><p>Converged Metro needs four racks (A5–A8) to keep the top band 8U deep, so the Waveserver 5 / WSAi pairs move into one Datacenter Interconnect rack (A9). The 6500 band is as deep as Canyon (14s + FMT + sign, 15U) and the RLS band as deep as Americas (3 OMC + R4-600 + FMT + sign, 9U), which puts the RLS nodes at U2–U10.</p>
       <h3>Room to grow</h3><ul><li>Waveserver E-Series: A9 has U14–U43 free under the Datacenter Interconnect stack (30U).</li><li>More 8100s: Converged Metro (A5–A8) is clear of the ELS band, so it can grow down to U32 (to U39 in A6).</li><li>More 5164s: Aggregation (A3–A4) has only U39–U40 before the ELS band. More than 2U each means moving ELS or spilling into another rack.</li></ul>
       <h3>Trade-offs</h3><ul><li>This is the only option where the packet story reads left to right in network order.</li><li>Both rings read node by node in ring order across the row, but each ring is spread over five racks.</li><li>The RLS band sits at U2–U13, at knee height.</li><li>Aggregation is boxed in by the ELS band; Converged Metro and the right-hand racks have room.</li></ul>
@@ -105,22 +205,22 @@
 <tr><th>A7</th><td>17</td><td>9</td><td>1</td><td></td><td><b>27</b></td><td><b>31</b></td><td class="ranges">U1–U6, U14–U20, U32–U41, U51–U58</td></tr>
 <tr><th>A8</th><td>17</td><td>9</td><td>1</td><td></td><td><b>27</b></td><td><b>31</b></td><td class="ranges">U1–U6, U14–U20, U32–U41, U51–U58</td></tr>
 <tr><th>A9</th><td>7</td><td>6</td><td>1</td><td></td><td><b>14</b></td><td><b>44</b></td><td class="ranges">U1–U6, U14–U43, U51–U58</td></tr>
-<tr><th>A10</th><td>0</td><td>3</td><td></td><td></td><td><b>3</b></td><td><b>55</b></td><td class="ranges">U1–U47, U51–U58</td></tr>
+<tr><th>A10</th><td>0</td><td>6</td><td></td><td></td><td><b>6</b></td><td><b>52</b></td><td class="ranges">U1–U31, U35–U47, U51–U58</td></tr>
         </tbody>
-        <tfoot><tr><th>Row</th><td colspan="4"></td><td><b>245</b></td><td><b>335</b></td><td>of 580U</td></tr></tfoot>
+        <tfoot><tr><th>Row</th><td colspan="4"></td><td><b>248</b></td><td><b>332</b></td><td>of 580U</td></tr></tfoot>
       </table>
     </div>
   </div>
 </section>
 
-<section id="option-2-photonic-center">
-  <h2>Option 2: Photonic in the Center</h2>
-  <a class="elev" href="option-2-photonic-center.svg"><img src="option-2-photonic-center.svg" alt="Option 2: Photonic in the Center front elevation, racks A1 to A10" loading="lazy"></a>
+<section id="option-5-photonic-center">
+  <h2>Option 5: Photonic in the Center</h2>
+  <a class="elev" href="option-5-photonic-center.svg"><img src="option-5-photonic-center.svg" alt="Option 5: Photonic in the Center front elevation, racks A1 to A10" loading="lazy"></a>
   <div class="cols">
     <div>
-      <h3>The story, left to right</h3><ul><li>Left, route/switch: Access over TDM (A1), Aggregation (A2), Converged Metro (A3–A4).</li><li>Center, photonic (A5–A7), both rings in ring order: RLS on top (Americas + Atlantic in A5, Europe + Asia in A6, Pacific + the Downtown/Uptown pair in A7); 6500 photonic below (Canyon + Wind in A5, Peak + Mountain in A6, Breeze in A7).</li><li>Right, service interfaces (A8–A9): Waveserver 5 + WSAi on top, 6500-D7 services below.</li><li>ELS is under Converged Metro in A4, right next to the photonic center: it is a line system, but the brief keeps the center for RLS and 6500.</li><li>A10: Outdoor.</li></ul>
-      <h3>Fit</h3><p>Fits in A1–A9 with no extra racks. RLS sits at the usual U48 placard line and 6500 photonic at the U27 line, so the photonic center lines up with today's signage heights.</p>
-      <h3>Room to grow</h3><ul><li>Waveserver E-Series: A8–A9 have U30–U45 free (16U each) under the Waveserver 5 / WSAi, right in the service-interface zone.</li><li>More 8100s: A3 has U1–U33 free under Converged Metro; A4 has U30–U35 before ELS.</li><li>More 5164s: A2 has U1–U33 free under Aggregation.</li></ul>
+      <h3>The story, left to right</h3><ul><li>Left, route/switch: Access over TDM (A1), Aggregation (A2), Converged Metro (A3–A4).</li><li>Center, photonic (A5–A7), both rings in ring order: RLS on top (Americas + Atlantic in A5, Europe + Asia in A6, Pacific + the Downtown/Uptown pair in A7); 6500 photonic below (Canyon + Wind in A5, Peak + Mountain in A6, Breeze in A7).</li><li>Right, service interfaces (A8–A9): Waveserver 5 + WSAi on top, 6500-D7 services below.</li><li>ELS is under Converged Metro in A4, right next to the photonic center: it is a line system, but the brief keeps the center for RLS and 6500.</li><li>A10: DCOM and Outdoor.</li></ul>
+      <h3>Fit</h3><p>Fits in A1–A9 with no extra racks. The upper zones keep the usual U48 placard line, but the lower ones (TDM, ELS, 6500 Photonic, 6500 Services) sit at U23 instead of U27: a zone sign grows up to 9U into the clear space above its placard, and from U27 the 6500 Photonic sign would cover the node signs under the RLS nodes.</p>
+      <h3>Room to grow</h3><ul><li>Waveserver E-Series: A8–A9 have U26–U45 free (20U each) under the Waveserver 5 / WSAi, right in the service-interface zone.</li><li>More 8100s: A3 has U1–U33 free under Converged Metro; A4 has U26–U35 before ELS.</li><li>More 5164s: A2 has U1–U33 free under Aggregation.</li></ul>
       <h3>Trade-offs</h3><ul><li>The photonic center (A5–A7) is the visual anchor and sits on the conference-table axis (A6).</li><li>Service interfaces are grouped, so a client-to-line story (A8–A9 → A5–A7) is easy to tell.</li><li>ELS is apart from RLS/6500, under the packet gear in A4.</li><li>The lower halves of A2–A3 are empty, which looks unfinished until growth arrives.</li></ul>
     </div>
     <div>
@@ -128,29 +228,29 @@
       <table>
         <thead><tr><th>Rack</th><th>Devices</th><th>Placards</th><th>Node signs</th><th>Reserved</th><th>Used</th><th>Free</th><th>Free U</th></tr></thead>
         <tbody>
-<tr><th>A1</th><td>12</td><td>6</td><td></td><td></td><td><b>18</b></td><td><b>40</b></td><td class="ranges">U1–U22, U30–U39, U51–U58</td></tr>
+<tr><th>A1</th><td>12</td><td>6</td><td></td><td></td><td><b>18</b></td><td><b>40</b></td><td class="ranges">U1–U18, U26–U39, U51–U58</td></tr>
 <tr><th>A2</th><td>14</td><td>3</td><td></td><td></td><td><b>17</b></td><td><b>41</b></td><td class="ranges">U1–U33, U51–U58</td></tr>
 <tr><th>A3</th><td>14</td><td>3</td><td></td><td></td><td><b>17</b></td><td><b>41</b></td><td class="ranges">U1–U33, U51–U58</td></tr>
-<tr><th>A4</th><td>24</td><td>6</td><td></td><td></td><td><b>30</b></td><td><b>28</b></td><td class="ranges">U1–U14, U30–U35, U51–U58</td></tr>
-<tr><th>A5</th><td>27</td><td>6</td><td>4</td><td></td><td><b>37</b></td><td><b>21</b></td><td class="ranges">U1–U8, U30–U34, U51–U58</td></tr>
-<tr><th>A6</th><td>27</td><td>6</td><td>4</td><td></td><td><b>37</b></td><td><b>21</b></td><td class="ranges">U1–U10, U30–U32, U51–U58</td></tr>
-<tr><th>A7</th><td>11</td><td>6</td><td>4</td><td></td><td><b>21</b></td><td><b>37</b></td><td class="ranges">U1–U23, U30–U35, U51–U58</td></tr>
-<tr><th>A8</th><td>10</td><td>6</td><td></td><td></td><td><b>16</b></td><td><b>42</b></td><td class="ranges">U1–U18, U30–U45, U51–U58</td></tr>
-<tr><th>A9</th><td>10</td><td>6</td><td></td><td></td><td><b>16</b></td><td><b>42</b></td><td class="ranges">U1–U18, U30–U45, U51–U58</td></tr>
-<tr><th>A10</th><td>0</td><td>3</td><td></td><td></td><td><b>3</b></td><td><b>55</b></td><td class="ranges">U1–U47, U51–U58</td></tr>
+<tr><th>A4</th><td>24</td><td>6</td><td></td><td></td><td><b>30</b></td><td><b>28</b></td><td class="ranges">U1–U10, U26–U35, U51–U58</td></tr>
+<tr><th>A5</th><td>27</td><td>6</td><td>4</td><td></td><td><b>37</b></td><td><b>21</b></td><td class="ranges">U1–U4, U26–U34, U51–U58</td></tr>
+<tr><th>A6</th><td>27</td><td>6</td><td>4</td><td></td><td><b>37</b></td><td><b>21</b></td><td class="ranges">U1–U6, U26–U32, U51–U58</td></tr>
+<tr><th>A7</th><td>11</td><td>6</td><td>4</td><td></td><td><b>21</b></td><td><b>37</b></td><td class="ranges">U1–U19, U26–U35, U51–U58</td></tr>
+<tr><th>A8</th><td>10</td><td>6</td><td></td><td></td><td><b>16</b></td><td><b>42</b></td><td class="ranges">U1–U14, U26–U45, U51–U58</td></tr>
+<tr><th>A9</th><td>10</td><td>6</td><td></td><td></td><td><b>16</b></td><td><b>42</b></td><td class="ranges">U1–U14, U26–U45, U51–U58</td></tr>
+<tr><th>A10</th><td>0</td><td>6</td><td></td><td></td><td><b>6</b></td><td><b>52</b></td><td class="ranges">U1–U31, U35–U47, U51–U58</td></tr>
         </tbody>
-        <tfoot><tr><th>Row</th><td colspan="4"></td><td><b>212</b></td><td><b>368</b></td><td>of 580U</td></tr></tfoot>
+        <tfoot><tr><th>Row</th><td colspan="4"></td><td><b>215</b></td><td><b>365</b></td><td>of 580U</td></tr></tfoot>
       </table>
     </div>
   </div>
 </section>
 
-<section id="option-3-vertical-slices">
-  <h2>Option 3: Portfolio Vertical Slices</h2>
-  <a class="elev" href="option-3-vertical-slices.svg"><img src="option-3-vertical-slices.svg" alt="Option 3: Portfolio Vertical Slices front elevation, racks A1 to A10" loading="lazy"></a>
+<section id="option-6-vertical-slices">
+  <h2>Option 6: Portfolio Vertical Slices</h2>
+  <a class="elev" href="option-6-vertical-slices.svg"><img src="option-6-vertical-slices.svg" alt="Option 6: Portfolio Vertical Slices front elevation, racks A1 to A10" loading="lazy"></a>
   <div class="cols">
     <div>
-      <h3>The story, left to right</h3><ul><li>One rack per product line, left to right: Access + TDM (A1), Aggregation (A2), Converged Metro (A3), ELS (A4), 6500 photonic (A5), 6500 services (A6), RLS (A7), Waveserver (A8).</li><li>Each ring is one rack, top to bottom in ring order: 6500 Canyon, Wind, Peak, Mountain, Breeze (A5); RLS Americas, Atlantic, Europe, Asia, Pacific, then Downtown and Uptown (A7).</li><li>ELS gets its own rack at A4, on the boundary between packet and optical: it is the access/edge line system, so it starts the optical half next to the packet racks that it carries.</li><li>A9 is left empty for a future slice. A10: Outdoor.</li></ul>
+      <h3>The story, left to right</h3><ul><li>One rack per product line, left to right: Access + TDM (A1), Aggregation (A2), Converged Metro (A3), ELS (A4), 6500 photonic (A5), 6500 services (A6), RLS (A7), Waveserver (A8).</li><li>Each ring is one rack, top to bottom in ring order: 6500 Canyon, Wind, Peak, Mountain, Breeze (A5); RLS Americas, Atlantic, Europe, Asia, Pacific, then Downtown and Uptown (A7).</li><li>ELS gets its own rack at A4, on the boundary between packet and optical: it is the access/edge line system, so it starts the optical half next to the packet racks that it carries.</li><li>A9 is left empty for a future slice. A10: DCOM and Outdoor.</li></ul>
       <h3>Fit</h3><p>The 6500 no longer fits in one rack: with a name sign under each ring node it needs 37U photonic + 16U services + two placards = 59U, one more than a 58U rack. The two D7 services shelves therefore get their own rack (A6) next to the photonic one, which pushes RLS to A7 and Waveserver to A8. RLS still fits in one rack (40U with signs + placard = 43U).</p>
       <h3>Room to grow</h3><ul><li>Waveserver E-Series: A8 has 22U marked as reserved (U22–U43) under the Waveserver 5 / WSAi.</li><li>More 8100s: A3 has U1–U21 free (21U) under Converged Metro.</li><li>More 5164s: A2 has U1–U33 free (33U) under Aggregation.</li><li>A9 is an empty rack for a new slice; A6 (6500 services) has U1–U31 free for more D7 shelves.</li></ul>
       <h3>Trade-offs</h3><ul><li>Each rack is one product line, so it is easy to point at &quot;the 6500 rack&quot; or &quot;the RLS rack&quot;.</li><li>Each ring reads as one column: five signed nodes, terminals and amps, top to bottom.</li><li>The 6500 takes two racks (photonic, services), so &quot;one 6500 rack&quot; becomes a pair; RLS moves to A7, one rack right of the conference-table axis.</li><li>The network story is per product, not per network layer, and A9 looks empty until a new slice arrives.</li></ul>
@@ -169,9 +269,9 @@
 <tr><th>A7</th><td>33</td><td>3</td><td>7</td><td></td><td><b>43</b></td><td><b>15</b></td><td class="ranges">U1–U7, U51–U58</td></tr>
 <tr><th>A8</th><td>4</td><td>3</td><td></td><td>22</td><td><b>29</b></td><td><b>29</b></td><td class="ranges">U1–U21, U51–U58</td></tr>
 <tr><th>A9</th><td>0</td><td>0</td><td></td><td></td><td><b>0</b></td><td><b>58</b></td><td class="ranges">U1–U58</td></tr>
-<tr><th>A10</th><td>0</td><td>3</td><td></td><td></td><td><b>3</b></td><td><b>55</b></td><td class="ranges">U1–U47, U51–U58</td></tr>
+<tr><th>A10</th><td>0</td><td>6</td><td></td><td></td><td><b>6</b></td><td><b>52</b></td><td class="ranges">U1–U31, U35–U47, U51–U58</td></tr>
         </tbody>
-        <tfoot><tr><th>Row</th><td colspan="4"></td><td><b>213</b></td><td><b>367</b></td><td>of 580U</td></tr></tfoot>
+        <tfoot><tr><th>Row</th><td colspan="4"></td><td><b>216</b></td><td><b>364</b></td><td>of 580U</td></tr></tfoot>
       </table>
     </div>
   </div>

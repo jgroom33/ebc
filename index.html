@@ -206,7 +206,7 @@
     <div class="logo">CIENA</div>
     <div class="sub">EXECUTIVE BRIEFING CENTER</div>
   </div>
-  <a id="docs-link" href="front-row/" title="Front elevation of racks A1–A10 for the current layout option">Front-row elevation ›</a>
+  <a id="docs-link" href="front-row/" title="Front elevation of racks A1–A10 for the layout showing">Front-row elevation ›</a>
   <div id="hint">drag to orbit · scroll to zoom · right-drag to pan · ← / → rack layout</div>
   <div id="layout-bar" role="group" aria-label="Rack layout">
     <button data-step="-1" title="Previous layout (←)" aria-label="Previous layout">‹</button>
@@ -664,8 +664,8 @@
     // -----------------------------------------------------------------------
     // Baked EBC layout (front row A1–A10, back row B2–B8), generated from the na-sales-lab
     // inventory YAML by tools/gen-rack-layout.mjs — run `node tools/gen-rack-layout.mjs` to refresh.
-    // The front-row devices here are today's plan; where they sit (and the front-row zone
-    // signs) comes from the selected option in tools/front-row/options.mjs — see RACK_LAYOUTS.
+    // Layouts 0–3 re-order its front-row sections; 4–6 re-place its devices per
+    // tools/front-row/options.mjs (see RACK_LAYOUTS).
     /* LAB-RACKS-START */
     // na-sales-lab @ c134f01b EBC layout: Outdoor placard down 16 U, DCOM placard in its old spot (#156)
     const LAB_RACKS = {
@@ -695,17 +695,48 @@
 };
     /* LAB-RACKS-END */
 
-    // Front-row layout options for the ‹ / › bar / ?layout=N: today's plan and the three
-    // re-arrangements in tools/front-row/options.mjs (the same layouts the front-row/ SVG
-    // elevations draw). Each option places every front-row device and 3U zone placard at its
-    // own rack and U; the back row never changes.
-    const RACK_LAYOUTS = FRONT_ROW_OPTIONS;
+    // Front-row layout options (RLS centred) for the iPad "Rack Layout" tile / ?layout=N.
+    // Each lists the baked racks' CURRENT display orders as section blocks, in their new
+    // left→right sequence — so a section's devices, signs, placards, fibers and ring move
+    // with it as one block. Racks never move; RLS lands on A5–A7, the most central 3 racks
+    // (A6 is ~7.5" right of the conference-table axis). The back row never changes.
+    const RACK_LAYOUTS = [
+      { name: 'Current',  desc: 'TDM · RLS · ELS · 6500 · Outdoor',
+        blocks: [[1], [2, 3, 4], [5, 6], [7, 8, 9], [10]] },
+      { name: 'Option 1 · Optical core', desc: 'TDM · 6500 · RLS · ELS · Outdoor',
+        blocks: [[1], [7, 8, 9], [2, 3, 4], [5, 6], [10]] },
+      { name: 'Option 2 · Edge → core', desc: 'Outdoor · TDM · ELS · RLS · 6500',
+        blocks: [[10], [1], [5, 6], [2, 3, 4], [7, 8, 9]] },
+      { name: 'Option 3 · Aggregation left', desc: 'ELS · Outdoor · TDM · RLS · 6500',
+        blocks: [[5, 6], [10], [1], [2, 3, 4], [7, 8, 9]] },
+      // Options 4–6 (?layout=4..6) re-arrange individual devices instead of whole sections:
+      // tools/front-row/options.mjs places every front-row device, zone sign and ring-node
+      // sign at its own rack and U. Its OPTIONS list all 7 entries in bar order (the 4 above
+      // are its SECTION_LAYOUTS, which tools/front-row/check.mjs keeps equal to these).
+      ...FRONT_ROW_OPTIONS.filter(o => !o.blocks),
+    ];
+    // A copy of LAB_RACKS with the front row re-ordered per `layout` (old order → new order).
+    function remapLabRacks(layout) {
+      const newOf = new Map();
+      layout.blocks.flat().forEach((o, i) => newOf.set(o, i + 1));
+      const mapId = (id) => (id[0] === 'A' && newOf.has(+id.slice(1))) ? 'A' + newOf.get(+id.slice(1)) : id;
+      const racks = {};
+      for (const [id, rk] of Object.entries(LAB_RACKS.racks))
+        racks[mapId(id)] = rk.row === 'front' ? { ...rk, order: newOf.get(rk.order) ?? rk.order } : rk;
+      const zones = LAB_RACKS.zones.map(z => {
+        const a = +mapId(z.rackStart).slice(1), b = +mapId(z.rackEnd).slice(1);
+        return { ...z, rackStart: 'A' + Math.min(a, b), rackEnd: 'A' + Math.max(a, b) };
+      });
+      const placards = (LAB_RACKS.placards || []).map(p => ({ ...p, rack: mapId(p.rack) }));
+      return { racks, zones, fibers: LAB_RACKS.fibers, rings: LAB_RACKS.rings, placards };
+    }
 
-    // The baked front-row devices are today's plan: match each to its options.mjs entry by
-    // rack + U. Devices in a unit (a ring node with its OMCs/FMT, an RLS-300 node, a D7 + FMT)
-    // are keyed by unit + part index, so a node keeps its own named parts; the rest go in
-    // per-product queues (in TODAY order) and an option takes the k-th device of a product for
-    // its k-th loose entry of it. Fibers and rings (keyed by device name) follow the devices.
+    // Options 4–6: the baked front-row devices are today's plan, so match each to its
+    // options.mjs entry by rack + U. Devices in a unit (a ring node with its OMCs/FMT, an
+    // RLS-300 node, a D7 + FMT) are keyed by unit + part index, so a node keeps its own named
+    // parts; the rest go in per-product queues (in TODAY order) and an option takes the k-th
+    // device of a product for its k-th loose entry of it. Fibers and rings (keyed by device
+    // name) follow the devices.
     const frontDeviceOf = (() => {
       const byUnit = new Map(), byProduct = new Map(), seen = {};
       for (const it of FRONT_ROW_TODAY.items) {
@@ -718,7 +749,12 @@
       return { byUnit, byProduct };
     })();
 
-    // LAB_RACKS with the front row laid out per `layout` (an options.mjs option).
+    const nodeSignsOf = (plan) =>
+      (plan.signs || []).map(sg => ({ unit: sg.unit, role: FRONT_ROW_UNITS[sg.unit].role, rack: sg.rack, ru: sg.u }));
+
+    // LAB_RACKS with the front row laid out per an options.mjs option (layouts 4–6). Zones use
+    // the baked convention (ru = the placard's middle U), so the signs are sized exactly like
+    // the baked ones; ring-node signs come from the option.
     function frontRowLabData(layout) {
       const { items, placards: zonePlacards, reserved, signs } = layout.plan;
       const racks = {};
@@ -736,12 +772,20 @@
       for (const r of reserved) racks[r.rack].reserved.push({ ru: r.u, h: r.h, label: r.label });
       const zones = zonePlacards.map(z => ({
         rackStart: z.rack, rackEnd: FRONT_RACKS[FRONT_RACKS.indexOf(z.rack) + z.span - 1],
-        label: z.label, ru: z.u, h: PLACARD_U,
+        label: z.label, ru: z.u + Math.floor(PLACARD_U / 2), h: PLACARD_U,
       }));
-      // Node name signs: the 1U just below each node, tagged terminal / amp (options.mjs).
-      const nodeSigns = (signs || []).map(sg => ({ unit: sg.unit, role: FRONT_ROW_UNITS[sg.unit].role, rack: sg.rack, ru: sg.u }));
-      return { racks, zones, fibers: LAB_RACKS.fibers, rings: LAB_RACKS.rings, nodeSigns };
+      const nodeSigns = nodeSignsOf(layout.plan);
+      // alignLower: false — the baked layout's shared lower-section sign band only fits the
+      // section-reorder layouts; here each zone sign sits in its own clear gap.
+      return { racks, zones, fibers: LAB_RACKS.fibers, rings: LAB_RACKS.rings, placards: [], nodeSigns, alignLower: false };
     }
+    // Layouts 0–3 re-order sections; every layout takes its ring-node signs from options.mjs
+    // (OPTIONS is in bar order), in place of the baked RLS name plates.
+    const labDataFor = (i) => {
+      const L = RACK_LAYOUTS[i];
+      if (!L.blocks) return frontRowLabData(L);
+      return { ...remapLabRacks(L), placards: [], nodeSigns: nodeSignsOf(FRONT_ROW_OPTIONS[i].plan) };
+    };
     const layoutParam = parseInt(new URLSearchParams(location.search).get('layout'), 10);
     let rackLayoutIdx = (layoutParam >= 0 && layoutParam < RACK_LAYOUTS.length) ? layoutParam : 0;
 
@@ -800,8 +844,7 @@
     // transparent overlays are skipped by that pass and would be invisible.
     function makeBigLabel(text, wM, hM) {
       const cv = document.createElement('canvas');
-      // Canvas keeps the plate's aspect (wide 3U zone signs would otherwise stretch the text).
-      cv.height = 160; cv.width = Math.min(4096, Math.max(160, Math.round(160 * wM / hM)));
+      cv.width = 1024; cv.height = Math.max(128, Math.round(1024 * hM / wM));
       const ctx = cv.getContext('2d'), W = cv.width, Hc = cv.height;
       ctx.fillStyle = '#1b2838'; ctx.fillRect(0, 0, W, Hc);        // solid dark-slate plate
       ctx.fillStyle = '#e4002b'; ctx.fillRect(0, Hc - Hc * 0.09, W, Hc * 0.09);  // Ciena-red base bar
@@ -818,8 +861,9 @@
         new THREE.MeshBasicMaterial({ map: tex }));                // opaque (no transparent flag)
     }
 
-    // Node name sign: dark plate (it sits between light-gray shelves) with the node name, and a coloured role tag on the right
-    // (blue TERMINAL, orange AMP, gray RLS-300) — the same look as the SVG elevations.
+    // Ring-node name sign: dark plate (it sits between light-gray shelves) with the node name,
+    // and a coloured role tag on the right (blue TERMINAL, orange AMP, gray RLS-300) — the same
+    // look as the SVG elevations.
     const ROLE_COLOR = { Terminal: '#0056b4', Amp: '#c2410c', 'RLS-300': '#4b5563' };
     function makeNodeSign(name, role, wM, hM) {
       const cv = document.createElement('canvas');
@@ -830,7 +874,7 @@
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillStyle = '#ffffff'; ctx.font = '800 66px "Segoe UI", Arial, sans-serif';
       ctx.fillText(name, (W - tagW) / 2, Hc / 2 + 3);
-      ctx.fillStyle = '#ffffff'; ctx.font = '800 50px "Segoe UI", Arial, sans-serif';
+      ctx.font = '800 50px "Segoe UI", Arial, sans-serif';
       ctx.fillText(role.toUpperCase(), W - tagW / 2, Hc / 2 + 3);
       const tex = new THREE.CanvasTexture(cv);
       tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
@@ -1034,49 +1078,72 @@
         }
       }
 
-      // Section signage: one large opaque sign per 3U zone placard, at the placard's own U
-      // (options.mjs) across the racks it spans, at the cable-trough plane — half an inch
-      // proud of the cable managers' front faces (rack face + 6") so the signs don't z-fight /
-      // flicker against them.
+      // Section signage: one large opaque sign per zone, sitting above its equipment
+      // in the clear RU gap (so it never overlaps gear), at the cable-trough plane.
+      // Half an inch proud of the cable managers' front faces (rack face + 6") so the signs
+      // don't z-fight / flicker against them.
       const signZ = frontRackZ + RACK_D / 2 + 6.5 * IN;
-      const zoneSpan = (z) => {
-        const xs = xOfOrder(orderOf(z.rackStart)), xe = xOfOrder(orderOf(z.rackEnd));
-        return { left: Math.min(xs, xe) - RACK_W / 2, right: Math.max(xs, xe) + RACK_W / 2 };
+      const occupiedFor = (rackStart, rackEnd) => {
+        const occ = new Array(60).fill(false);
+        for (let o = orderOf(rackStart); o <= orderOf(rackEnd); o++)
+          for (const d of (labData.racks['A' + o]?.devices || []))
+            for (let ru = d.ru; ru < d.ru + d.h; ru++) if (ru >= 1 && ru <= 59) occ[ru] = true;
+        return occ;
       };
-      for (const z of labData.zones) {
-        const { left, right } = zoneSpan(z), hM = z.h * U_M - 0.2 * IN;
-        const sign = makeBigLabel(z.label, right - left, hM);
-        sign.position.set((left + right) / 2, RACK_PLINTH + (z.ru - 1) * U_M + z.h * U_M / 2, signZ);
-        g.add(sign);
+      const gapBand = (occ, anchor) => {                 // clear gap around the anchor RU
+        let bottom = anchor; while (bottom <= 58 && occ[bottom]) bottom++;
+        while (bottom - 1 >= 1 && !occ[bottom - 1]) bottom--;
+        let top = bottom; while (top + 1 <= 58 && !occ[top + 1]) top++;
+        return { bottom, hRU: Math.min(9, top - bottom + 1 - 0.5) };
+      };
+      // The 6500/ELS/RLS lower-section signs share ONE aligned band — the clear gap
+      // common to their racks, capped by the tightest section (RLS, under the 8192s).
+      const ALIGNED = new Set(['6500', 'ELS', 'RLS', 'TDM']);
+      const lowerZones = labData.alignLower === false ? [] : labData.zones.filter(z => ALIGNED.has(z.label));
+      let alignedBand = null;
+      if (lowerZones.length) {
+        const occ = new Array(60).fill(false);
+        for (const z of lowerZones) { const o2 = occupiedFor(z.rackStart, z.rackEnd); for (let i = 0; i < 60; i++) if (o2[i]) occ[i] = true; }
+        alignedBand = gapBand(occ, lowerZones[0].ru);
       }
-
-      // Reserved space (e.g. for Waveserver E-Series): an opaque dark plate with a dashed amber
-      // border on the rack face, so it reads through the glass like the signs.
-      for (const [id, rk] of Object.entries(labData.racks)) {
-        for (const r of rk.reserved || []) {
-          const hM = r.h * U_M - 0.2 * IN, wM = 19 * IN;
-          const plate = makeReservedPanel(r.label, wM, hM);
-          plate.position.set(xOfOrder(rk.order), RACK_PLINTH + (r.ru - 1) * U_M + r.h * U_M / 2,
-                             frontRackZ + DEV_FRONT);
-          plate.name = `Reserved:${id}`;
-          g.add(plate);
-        }
+      for (const z of labData.zones) {
+        if (z.label === 'Outdoor Units') continue;     // not signed (redundant with Outdoor)
+        const { bottom, hRU } = (ALIGNED.has(z.label) && alignedBand)
+          ? alignedBand
+          : (() => { let b = z.ru, occ = occupiedFor(z.rackStart, z.rackEnd);
+              while (b <= 58 && occ[b]) b++; let t = b; while (t + 1 <= 58 && !occ[t + 1]) t++;
+              return { bottom: b, hRU: Math.min(9, t - b + 1 - 0.5) }; })();
+        if (hRU < 2) continue;
+        const hM = hRU * U_M;
+        const xs = xOfOrder(orderOf(z.rackStart)), xe = xOfOrder(orderOf(z.rackEnd));
+        const left = Math.min(xs, xe) - RACK_W / 2, right = Math.max(xs, xe) + RACK_W / 2;
+        const sign = makeBigLabel(z.label, right - left, hM);
+        sign.position.set((left + right) / 2, RACK_PLINTH + (bottom - 1) * U_M + hM / 2, signZ);
+        g.add(sign);
       }
 
       // Section accent downlight — an LED bar tucked behind a sign's lower edge, washing
       // the equipment below. Always on; in Spotlight mode (room dark) it makes the section
-      // glow. Built per zone so more sections can be added with another call.
-      function addSectionDownlight(z) {
-        const { left, right } = zoneSpan(z);
-        const cx = (left + right) / 2, sillY = RACK_PLINTH + (z.ru - 1) * U_M;
+      // glow. Built per-label so more sections can be added with another call.
+      function addSectionDownlight(label) {
+        const z = labData.zones.find(zo => zo.label === label);
+        if (!z) return;
+        const { bottom } = (ALIGNED.has(label) && alignedBand)
+          ? alignedBand
+          : (() => { let b = z.ru, occ = occupiedFor(z.rackStart, z.rackEnd);
+              while (b <= 58 && occ[b]) b++; return { bottom: b }; })();
+        const xs = xOfOrder(orderOf(z.rackStart)), xe = xOfOrder(orderOf(z.rackEnd));
+        const left = Math.min(xs, xe) - RACK_W / 2, right = Math.max(xs, xe) + RACK_W / 2;
+        const cx = (left + right) / 2, sillY = RACK_PLINTH + (bottom - 1) * U_M;
         const led = new THREE.RectAreaLight(0xeaf2ff, 14.0, (right - left) - 4 * IN, 5 * IN);
         led.position.set(cx, sillY + 1 * IN, signZ - 4 * IN);   // behind the sign's lower edge
         led.rotation.x = -Math.PI / 2 + 0.4;                    // face down, raked at the rack faces
-        led.userData.section = z.label; led.userData.base = led.intensity;
+        led.userData.section = label; led.userData.base = led.intensity;
         sectionDownlights.push(led);
         g.add(led);
       }
-      for (const z of labData.zones) if (z.label.startsWith('6500')) addSectionDownlight(z);
+      addSectionDownlight('6500');
+      for (const z of labData.zones) if (z.label.startsWith('6500 ')) addSectionDownlight(z.label);
 
       // Fiber spans: a glowing patch-cable between two named devices, bowed toward the glass.
       for (const f of labData.fibers) {
@@ -1102,15 +1169,40 @@
         }
       }
 
-      // Node name signs: a 1U opaque plate on the rack face just below each RLS / 6500 ring node
-      // (and the RLS-300 pair) — the node name plus a TERMINAL / AMP tag, so each ring reads as
-      // 3 terminals + 2 amps. Opaque so it survives the glass transmission pass like the signs.
+      // Name placards: a small opaque plate (section-sign style) on the rack face for each
+      // RLS node (the generator's PLACARD_FAMILIES), in the free RU next to
+      // its shelf — the generator has already picked the RU (below, else above, else on the
+      // shelf). Opaque so it survives the glass transmission pass like the section signs.
+      for (const pl of (labData.placards || [])) {
+        const rk = labData.racks[pl.rack];
+        if (!rk) continue;
+        const x = xOfOrder(rk.order), z = rk.row === 'back' ? backRackZ : frontRackZ;
+        const hM = 0.8 * U_M, wM = 11 * IN;
+        const plate = makeBigLabel(pl.label, wM, hM);
+        plate.position.set(x, RACK_PLINTH + (pl.ru - 1 + 0.5) * U_M, z + DEV_FRONT + 0.9 * IN);
+        plate.name = `Placard:${pl.name}`;
+        g.add(plate);
+      }
+
+      // Options 4–6: reserved space (e.g. for Waveserver E-Series) as an opaque dark plate with a
+      // dashed amber border on the rack face, so it reads through the glass like the signs.
+      for (const [id, rk] of Object.entries(labData.racks)) {
+        for (const r of rk.reserved || []) {
+          const plate = makeReservedPanel(r.label, 19 * IN, r.h * U_M - 0.2 * IN);
+          plate.position.set(xOfOrder(rk.order), RACK_PLINTH + (r.ru - 1) * U_M + r.h * U_M / 2, frontRackZ + DEV_FRONT);
+          plate.name = `Reserved:${id}`;
+          g.add(plate);
+        }
+      }
+      // Ring-node name signs (every layout) — a 1U plate (19" x 1U, the size of a 1U shelf face) on
+      // the rack face in the U just below each RLS / 6500 ring node (and the RLS-300 pair): the
+      // node name plus a TERMINAL / AMP tag, so each ring reads as 3 terminals + 2 amps. They
+      // sit on the rack face, behind the zone signs' plane, and don't affect zone sign sizing.
       for (const ns of (labData.nodeSigns || [])) {
         const rk = labData.racks[ns.rack];
         if (!rk) continue;
-        const x = xOfOrder(rk.order), z = rk.row === 'back' ? backRackZ : frontRackZ;
         const plate = makeNodeSign(ns.unit, ns.role, 19 * IN, U_M - 0.18 * IN);
-        plate.position.set(x, RACK_PLINTH + (ns.ru - 1 + 0.5) * U_M, z + DEV_FRONT);
+        plate.position.set(xOfOrder(rk.order), RACK_PLINTH + (ns.ru - 1 + 0.5) * U_M, frontRackZ + DEV_FRONT);
         plate.name = `NodeSign:${ns.unit}`;
         g.add(plate);
       }
@@ -1435,7 +1527,7 @@
     }
     buildTable();
     placeChairs();
-    let labGroup = buildLab(frontRowLabData(RACK_LAYOUTS[rackLayoutIdx]));
+    let labGroup = buildLab(labDataFor(rackLayoutIdx));
     buildRightRoom();
     buildConfScreen();
     buildCeilingLights();
@@ -1605,7 +1697,7 @@
         m.map?.dispose(); m.dispose();
       }
       rackLayoutIdx = i;
-      labGroup = buildLab(frontRowLabData(RACK_LAYOUTS[i]));
+      labGroup = buildLab(labDataFor(i));
       updateLayoutBar();
       if (keepRing) setFiberRing(true); else if (keepSpot) setSpotlightMode(true);
       const url = new URL(location.href);
@@ -1626,7 +1718,8 @@
       layoutBar.querySelector('.name').textContent = `${rackLayoutIdx + 1} / ${RACK_LAYOUTS.length} · ${L.name}`;
       layoutBar.querySelector('.desc').textContent = L.desc;
       layoutDots.forEach((d, i) => d.classList.toggle('on', i === rackLayoutIdx));
-      document.getElementById('docs-link').href = `front-row/#${L.key}`;   // this option's elevation
+      // Link this layout's elevation (OPTIONS is in bar order).
+      document.getElementById('docs-link').href = `front-row/#${FRONT_ROW_OPTIONS[rackLayoutIdx].key}`;
     }
     const stepLayout = (dir) =>
       setRackLayout((rackLayoutIdx + dir + RACK_LAYOUTS.length) % RACK_LAYOUTS.length);

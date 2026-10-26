@@ -3,15 +3,24 @@
 //   - places every device of today's plan exactly once (same products, same counts),
 //   - every block sits inside U1–U58 and no two blocks in a rack overlap,
 //   - every rack is at or under 58U, every placard is 3U,
+//   - the DCOM and Outdoor placards are there (once each),
+//   - every zone sign gets drawn (sized as the 3D scene sizes it, tools/front-row/signs.mjs) and
+//     covers no ring-node sign or reserved space,
 //   - every unit (ring node, RLS-300 node, 6500-D7 + FMT) has all its parts, in order top to
 //     bottom, contiguous in one rack, and each node has its name sign in the U just below it.
-// It also reports, per ring, where the 5 nodes are and whether they sit in ring order.
+// It also reports, per ring, where the 5 nodes are and whether they sit in ring order, and checks
+// that SECTION_LAYOUTS matches the section re-orders kept verbatim in index.html's RACK_LAYOUTS,
+// and that OPTIONS lines up with the 3D scene's ‹ / › bar (same names, same order).
 // Exits non-zero on any failure.
 //
 //   node tools/front-row/check.mjs              # check every option
 //   node tools/front-row/check.mjs --selftest   # prove it catches broken plans
-import { OPTIONS, TODAY, RACKS, RACK_U, UNITS, RINGS, height, hasSign } from './options.mjs';
+import { readFileSync } from 'node:fs';
+import { OPTIONS, TODAY, RACKS, RACK_U, UNITS, RINGS, SECTION_LAYOUTS, height, hasSign } from './options.mjs';
 import { blocks, usage } from './layout.mjs';
+import { zoneSigns } from './signs.mjs';
+
+const REQUIRED_PLACARDS = ['DCOM', 'Outdoor'];
 
 const count = (items) => {
   const m = new Map();
@@ -21,7 +30,7 @@ const count = (items) => {
 const want = count(TODAY.items);
 
 // Errors for one plan, plus notes on where each ring's nodes are.
-function checkPlan(plan) {
+function checkPlan(plan, { alignLower = false } = {}) {
   const opt = { plan };
   const errs = [];
   const got = count(opt.plan.items);
@@ -43,6 +52,24 @@ function checkPlan(plan) {
     if (use[rack].used > RACK_U) errs.push(`${rack}: ${use[rack].used}U used, over ${RACK_U}U`);
   }
   for (const p of opt.plan.placards) if (p.span < 1) errs.push(`placard '${p.label}' has span ${p.span}`);
+
+  for (const label of REQUIRED_PLACARDS) {
+    const n = opt.plan.placards.filter(p => p.label === label).length;
+    if (n !== 1) errs.push(`placard '${label}': ${n} placed, want 1`);
+  }
+  // Zone signs: each placard's sign is drawn, and doesn't cover a node sign or reserved space.
+  const drawn = zoneSigns(opt.plan, { alignLower });
+  for (const p of opt.plan.placards)
+    if (!drawn.some(z => z.label === p.label && z.rackStart === p.rack))
+      errs.push(`zone sign '${p.label}' (${p.rack}): no clear 2U gap above its placard, so it would not be drawn`);
+  for (const z of drawn) {
+    const racks = RACKS.slice(RACKS.indexOf(z.rackStart), RACKS.indexOf(z.rackEnd) + 1);
+    const lo = z.bottom, hi = z.bottom + z.hRU;               // sign covers [lo, hi) in U
+    for (const sg of opt.plan.signs || [])
+      if (racks.includes(sg.rack) && sg.u < hi && sg.u + 1 > lo) errs.push(`zone sign '${z.label}' covers the ${sg.unit} node sign at ${sg.rack} U${sg.u}`);
+    for (const r of opt.plan.reserved)
+      if (racks.includes(r.rack) && r.u < hi && r.u + r.h > lo) errs.push(`zone sign '${z.label}' covers reserved space in ${r.rack}`);
+  }
 
   // Units: all parts, in order, contiguous, one rack; name sign directly below.
   const where = {};
@@ -84,9 +111,9 @@ function checkPlan(plan) {
   return { errs, ringNotes, use };
 }
 
-// --selftest: break a copy of option 1 in each way the check must catch.
+// --selftest: break a copy of option 4 in each way the check must catch.
 if (process.argv.includes('--selftest')) {
-  const base = OPTIONS[1].plan, clone = () => structuredClone(base);
+  const base = OPTIONS.find(o => o.key === 'option-4-access-to-core').plan, clone = () => structuredClone(base);
   const cases = {
     'node split across racks': (p) => { p.items.find(i => i.unit === 'Americas' && i.product === 'FMT').rack = 'A10'; },
     'node parts out of order': (p) => {                 // Europe: R4 on top, its OMCs under it
@@ -95,6 +122,8 @@ if (process.argv.includes('--selftest')) {
       r4.u = top - height(r4.product) + 1; o1.u = r4.u - 1; o2.u = r4.u - 2;
     },
     'node missing its sign': (p) => { p.signs = p.signs.filter(sg => sg.unit !== 'Canyon'); },
+    'DCOM placard missing': (p) => { p.placards = p.placards.filter(z => z.label !== 'DCOM'); },
+    'zone sign covers a node sign': (p) => { p.signs.find(sg => sg.unit === 'Canyon').u = 30; },
     'device dropped': (p) => { p.items.splice(p.items.findIndex(i => i.product === 'WSAi'), 1); },
     'overlap': (p) => { p.items.find(i => i.product === 'Waveserver 5').u = 47 - 1; },
   };
@@ -109,8 +138,26 @@ if (process.argv.includes('--selftest')) {
 }
 
 let failed = 0;
+
+// index.html's RACK_LAYOUTS section entries must be SECTION_LAYOUTS, and the bar = OPTIONS order.
+{
+  const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  const m = html.match(/const RACK_LAYOUTS = \[([\s\S]*?)\.\.\.FRONT_ROW_OPTIONS/);
+  const errs = [];
+  if (!m) errs.push('RACK_LAYOUTS (section entries, then ...FRONT_ROW_OPTIONS) not found in index.html');
+  else {
+    const inline = (0, eval)(`[${m[1].replace(/\/\/.*$/gm, '')}]`);
+    if (JSON.stringify(inline) !== JSON.stringify(SECTION_LAYOUTS))
+      errs.push('index.html RACK_LAYOUTS section entries differ from SECTION_LAYOUTS in options.mjs');
+    const bar = [...inline.map(l => l.name), ...OPTIONS.filter(o => !o.blocks).map(o => o.name)];
+    OPTIONS.forEach((o, i) => { if (o.name !== bar[i]) errs.push(`bar entry ${i} is '${bar[i]}', OPTIONS[${i}] is '${o.name}'`); });
+  }
+  if (errs.length) { failed++; console.log('FAIL index.html layout bar'); for (const e of errs) console.log(`     - ${e}`); }
+  else console.log(`ok   index.html layout bar: ${OPTIONS.length} entries, ?layout=0..${OPTIONS.length - 1} = OPTIONS order`);
+}
+
 for (const opt of OPTIONS) {
-  const { errs, ringNotes, use } = checkPlan(opt.plan);
+  const { errs, ringNotes, use } = checkPlan(opt.plan, { alignLower: opt.alignLower });
   const n = opt.plan.items.length;
   const maxUsed = Math.max(...RACKS.map(r => use[r].used));
   const line = `${opt.title.padEnd(36)} ${String(n).padStart(3)} devices (plan ${TODAY.items.length}), ` +
@@ -122,6 +169,6 @@ for (const opt of OPTIONS) {
   } else console.log(`ok   ${line}`);
   for (const n of ringNotes) console.log(`       ${n}`);
 }
-console.log(failed ? `\n${failed} option(s) failed` : `\nall ${OPTIONS.length} options pass: every device placed exactly once, no overlaps, every rack <= ${RACK_U}U,\n` +
-  `every node whole, in order, in one rack, with its name sign`);
+console.log(failed ? `\n${failed} check(s) failed` : `\nall ${OPTIONS.length} options pass: every device placed exactly once, no overlaps, every rack <= ${RACK_U}U,\n` +
+  `every node whole, in order, in one rack, with its name sign; DCOM and Outdoor placed; zone signs clear`);
 process.exit(failed ? 1 : 0);

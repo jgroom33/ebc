@@ -37,42 +37,56 @@ python3 -m http.server 8000   # then open http://localhost:8000
 
 ## Rack layout options
 
-Four front-row (A1–A10) arrangements. Step through them live with the **‹ / ›** bar at the
-top of the screen (or the ← / → keys), or link straight to one. Spotlight and Fiber Ring
-stay on across a switch, so you can watch them move:
+Alternative front-row arrangements, all with the **RLS centred**. Step through them live
+with the **‹ / ›** bar at the bottom of the screen (or the ← / → keys), or link straight to one.
+Spotlight and Fiber Ring stay on across a switch, so you can watch them move:
 
 | Layout | Front row (A1 → A10) | Link |
 | --- | --- | --- |
-| Today's plan | Access/TDM · Converged Metro/RLS · Aggregation/ELS · DCI/6500 · Outdoor | `?layout=0` |
-| Option 1, Access to Core | Access → TDM → Aggregation → Converged Metro → DCI across the top; ELS over 6500 over RLS below | `?layout=1` |
-| Option 2, Photonic in the Center | Route/switch · RLS over 6500 photonic · Waveserver/WSAi over 6500-D7 · Outdoor | `?layout=2` |
-| Option 3, Portfolio Vertical Slices | One rack each: Access+TDM · Aggregation · Converged Metro · ELS · 6500 · RLS · Waveserver | `?layout=3` |
+| Current | TDM · RLS · ELS · 6500 · Outdoor | `?layout=0` |
+| Option 1, optical core | TDM · 6500 · **RLS** · ELS · Outdoor | `?layout=1` |
+| Option 2, edge → core | Outdoor · TDM · ELS · **RLS** · 6500 | `?layout=2` |
+| Option 3, aggregation left | ELS · Outdoor · TDM · **RLS** · 6500 | `?layout=3` |
+| Option 4, Access to Core | Access → TDM → Aggregation → Converged Metro → DCI across the top; ELS over 6500 over RLS below | `?layout=4` |
+| Option 5, Photonic in the Center | Route/switch · RLS over 6500 photonic · Waveserver/WSAi over 6500-D7 · DCOM/Outdoor | `?layout=5` |
+| Option 6, Portfolio Vertical Slices | One rack each: Access+TDM · Aggregation · Converged Metro · ELS · 6500 photonic · 6500 services · RLS · Waveserver · DCOM/Outdoor | `?layout=6` |
 
-Each option places every front-row device and 3U zone sign at its own rack and U; the back
-row (B2–B8) never changes. The RLS and 6500 rings are 5 nodes each (3 terminals, 2 amps):
-every node stays whole in one rack (its OMCs and FMT with it) with a 1U name sign just below
-it, tagged **TERMINAL** or **AMP**. Fibers and fiber rings follow their devices. The **Front-row elevation ›** link at the top right opens the current option's
-flat elevation.
+Racks never move; whole sections (devices, signs, placards, fibers, fiber ring) move
+between them. In options 1–3 the RLS / Converged Metro section is on A5–A7, the most
+central three racks (A6 sits ~7.5" right of the conference-table axis).
+The options live in `RACK_LAYOUTS` in `index.html`,
+outside the generated `LAB-RACKS` block, so regenerating the inventory keeps them.
+
+Options 4–6 instead re-place individual devices, from `tools/front-row/options.mjs`: every
+front-row device and zone sign sits at its own rack and U, and the back row (B2–B8) never
+changes. Zone signs are sized exactly as in options 0–3 (each fills the clear space above its
+placard, up to 9U). DCOM and Outdoor stay in A10. The RLS and 6500 rings are 5 nodes each
+(3 terminals, 2 amps): every node stays whole in one rack (its OMCs and FMT with it), in ring
+order, with a 1U name sign just below it tagged **TERMINAL** or **AMP** (options 0–3 show the
+same tagged node signs). Fibers and fiber rings follow their devices. The **Front-row
+elevation ›** link at the top right opens the flat elevation of whichever layout is showing.
 
 ## Front-row elevations
 
-The layouts live in `tools/front-row/options.mjs`, the single source for both the 3D scene
-(which imports it) and [`front-row/`](front-row/): a flat front elevation per option plus a
-comparison page (story, U used/free per rack, room to grow, trade-offs). After changing them:
+[`front-row/`](front-row/) has a flat A1–A10 front elevation for each of the seven layouts
+plus a comparison page (story, U used/free per rack, room to grow, trade-offs). They come from
+`tools/front-row/options.mjs`: options 4–6 directly, Current and options 1–3 as today's plan
+re-ordered by the same rack blocks as `RACK_LAYOUTS` (the check keeps the two in step).
+After changing them:
 
 ```bash
-node tools/front-row/check.mjs   # every device placed once, no overlaps, every rack <= 58U,
-                                 # every node whole, in order, in one rack, with its sign
+node tools/front-row/check.mjs   # all 7 layouts: every device once, no overlaps, every rack <= 58U,
+                                 # every node whole, in order, with its sign; DCOM + Outdoor placed
 node tools/front-row/check.mjs --selftest   # proves the check catches broken layouts
 node tools/front-row/gen.mjs     # redraw front-row/*.svg and front-row/index.html
 ```
 
 ## Lab rack data
 
-The racks, fiber rings and fibers are baked into `index.html` from the
+The racks, zone signs, fiber rings and RLS name plates are baked into `index.html` from the
 EBC layout in the [na-sales-lab](https://github.com/ciena-corp/na-sales-lab) inventory YAML
-(`provisioner/inventory/`); front-row positions, zone signs and node signs come from
-`tools/front-row/options.mjs`. To refresh after an inventory change:
+(`provisioner/inventory/`); options 4–6 take front-row positions and zone signs from
+`tools/front-row/options.mjs` instead, and every layout takes its ring-node signs from it. To refresh after an inventory change:
 
 ```bash
 node tools/gen-rack-layout.mjs        # fetches ../lab and reads origin/main

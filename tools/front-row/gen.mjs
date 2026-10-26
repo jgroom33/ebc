@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { OPTIONS, RACKS, RACK_U, PRODUCTS, PLACARD_U, UNITS } from './options.mjs';
 import { usage } from './layout.mjs';
+import { zoneSigns } from './signs.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(here, '../../front-row');
@@ -106,13 +107,21 @@ function svg(opt) {
     parts.push(`<path d="M${x - 1.5} ${uY(top) + 1} h-1.5 V${y + hh} h1.5" fill="none" stroke="${ROLE[role]}" stroke-width="1.5"/>`);
   }
 
-  // Zone placards (3U), one panel across the racks they span.
-  for (const z of p.placards) {
-    const i = RACKS.indexOf(z.rack), x = rackX(i) - 1, w = z.span * RACK_W + (z.span - 1) * GAP + 2;
-    const y = uY(z.u + PLACARD_U - 1) + 1, h = PLACARD_U * UH - 2;
-    parts.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="3" fill="#eaf1f8" stroke="#0056b4" stroke-width="2"/>`);
-    const label = z.label.toUpperCase(), size = Math.min(13, (w - 10) / (label.length * 0.72));
-    parts.push(text(x + w / 2, y + h / 2, label, { size: +size.toFixed(1), weight: 800, fill: '#0b2a4f' }));
+  // Zone signs, sized and drawn as the 3D scene draws them (signs.mjs; index.html makeBigLabel):
+  // a dark-slate plate across the racks it spans, filling the clear space above its 3U placard
+  // (up to 9U), with a Ciena-red base bar and white text drawn on a 1024-wide canvas that is
+  // then stretched to the plate, just as the scene's canvas texture is.
+  for (const z of zoneSigns(p, { alignLower: opt.alignLower })) {
+    const x = rackX(RACKS.indexOf(z.rackStart)), w = rackX(RACKS.indexOf(z.rackEnd)) + RACK_W - x;
+    const h = z.hRU * UH, y = uY(z.bottom) + UH - h;
+    const CW = 1024, CH = Math.max(128, Math.round(CW * h / w));
+    let fs = Math.round(CH * 0.62);
+    const em = [...z.label].reduce((n, c) => n + (c === ' ' ? 0.28 : /[A-Z0-9]/.test(c) ? 0.7 : 0.56), 0);
+    while (em * fs > CW * 0.9 && fs > 12) fs -= 4;              // ~ canvas measureText, bold sans
+    parts.push(`<g transform="translate(${x} ${y.toFixed(1)}) scale(${(w / CW).toFixed(5)} ${(h / CH).toFixed(5)})">` +
+      `<rect width="${CW}" height="${CH}" fill="#1b2838"/>` +
+      `<rect y="${(CH * 0.91).toFixed(1)}" width="${CW}" height="${(CH * 0.09).toFixed(1)}" fill="#e4002b"/>` +
+      text(CW / 2, CH / 2 - CH * 0.02, z.label, { size: fs, weight: 700, fill: '#ffffff' }) + '</g>');
   }
 
   // Legend.
@@ -218,10 +227,14 @@ ${rows}
   <div class="logo">CIENA</div>
   <div class="sub">EXECUTIVE BRIEFING CENTER</div>
   <h1>Front-row options, racks A1–A10</h1>
-  <p class="note">Ten 19" racks, 58U each, U1 at the bottom. Every option places the same ${OPTIONS[0].plan.items.length} devices as today's plan, each once, at true U height;
-  zone placards are 3U. The RLS and 6500 rings are 5 nodes each (3 terminals, 2 amps); every node stays whole in one rack
-  with a 1U name sign just below it, tagged terminal or amp. U used counts devices, placards, node signs and reserved space. These are separate from the rack layouts in the
-  <a href="../">3D scene</a>'s ‹ / › switcher, which only move whole sections between racks.</p>
+  <p class="note">Ten 19" racks, 58U each, U1 at the bottom. Every option places the same ${OPTIONS[0].plan.items.length} devices as today's plan, each once, at true U height.
+  Each zone has a 3U placard position; its sign is drawn as the 3D scene draws it, filling the clear space above that
+  position (up to 9U), so a sign shrinks as gear is added under it. DCOM and Outdoor stay in A10 in Options 4–6; Options 2 and 3 move their rack to A1 and A3.
+  The RLS and 6500 rings are 5 nodes each (3 terminals, 2 amps); every node stays whole in one rack with a 1U name sign
+  just below it, tagged terminal or amp. U used counts devices, 3U placards, node signs and reserved space.</p>
+  <p class="note">These are the seven layouts of the <a href="../">3D scene</a>'s ‹ / › bar, in its order (<code>?layout=0..6</code>).
+  Current is today's plan. Options 1–3 move whole sections of it between racks, nothing inside a rack moves; Options 4–6
+  re-place individual devices.</p>
   <div class="preferred">Preferred option: TBD</div>
   <nav>${nav}</nav>
 ${sections}
