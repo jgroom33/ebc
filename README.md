@@ -54,6 +54,22 @@ central three racks (A6 sits ~7.5" right of the conference-table axis).
 The options live in `RACK_LAYOUTS` in `index.html`,
 outside the generated `LAB-RACKS` block, so regenerating the inventory keeps them.
 
+## Front-row elevations
+
+[`front-row/`](front-row/) has flat front elevations of the customer-facing row, racks
+A1–A10, for today's plan and three re-arrangements (Access to Core, Photonic in the Center,
+Portfolio Vertical Slices), plus a comparison page (story, U used/free per rack, room to grow,
+trade-offs). The **Front-row elevations ›** link at the top right of the 3D scene opens it.
+These are separate from the 3D switcher's layouts above: they move individual devices, not
+whole sections.
+
+The layouts live in `tools/front-row/options.mjs`. After changing them:
+
+```bash
+node tools/front-row/check.mjs   # every device placed once, no overlaps, every rack <= 58U
+node tools/front-row/gen.mjs     # redraw front-row/*.svg and front-row/index.html
+```
+
 ## Lab rack data
 
 The racks, zone signs, fiber rings and RLS name plates are baked into `index.html` from the

@@ -21,6 +21,15 @@
     }
     #hud .logo { font-size: 30px; font-weight: 700; letter-spacing: 4px; color: #e4002b; }
     #hud .sub  { font-size: 13px; font-weight: 400; letter-spacing: 2px; opacity: 0.85; margin-top: 2px; }
+    /* Link to the front-row elevation mock-ups (front-row/index.html). */
+    #docs-link {
+      position: fixed; top: 22px; right: 26px; z-index: 12;
+      font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif; font-size: 13px;
+      font-weight: 600; letter-spacing: 1px; color: #eaf1f8; text-decoration: none;
+      padding: 8px 14px; border-radius: 16px; background: rgba(14,20,29,0.80);
+      border: 1px solid rgba(120,170,230,0.22);
+    }
+    #docs-link:hover { background: rgba(47,143,230,0.25); border-color: rgba(47,143,230,0.6); }
     #hint {
       position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 10;
       font-family: "Segoe UI", system-ui, sans-serif; font-size: 12px; letter-spacing: 1px;
@@ -197,6 +206,7 @@
     <div class="logo">CIENA</div>
     <div class="sub">EXECUTIVE BRIEFING CENTER</div>
   </div>
+  <a id="docs-link" href="front-row/" title="Front elevations of racks A1–A10 for each layout option">Front-row elevations ›</a>
   <div id="hint">drag to orbit · scroll to zoom · right-drag to pan · ← / → rack layout</div>
   <div id="layout-bar" role="group" aria-label="Rack layout">
     <button data-step="-1" title="Previous layout (←)" aria-label="Previous layout">‹</button>
