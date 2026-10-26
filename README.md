@@ -5,8 +5,8 @@ A real-time 3D rendering of an Executive Briefing Center conference room, built 
 hallway, and the far side of the hallway is a **second glass wall of equal length** —
 so you can see straight through: room → glass → hallway → glass → beyond.
 
-Orbit with the mouse to inspect it. The whole thing is a **single, self-contained
-`index.html`** (three.js loads from a CDN), so it runs on GitHub Pages with no build step.
+Orbit with the mouse to inspect it. The whole thing is a **single `index.html`** (three.js loads from a CDN; the front-row
+layouts load from `tools/front-row/options.mjs`), so it runs on GitHub Pages with no build step.
 
 ## What's in the scene
 
@@ -47,18 +47,46 @@ Spotlight and Fiber Ring stay on across a switch, so you can watch them move:
 | Option 1, optical core | TDM · 6500 · **RLS** · ELS · Outdoor | `?layout=1` |
 | Option 2, edge → core | Outdoor · TDM · ELS · **RLS** · 6500 | `?layout=2` |
 | Option 3, aggregation left | ELS · Outdoor · TDM · **RLS** · 6500 | `?layout=3` |
+| Option 4, Access to Core | Access → TDM → Aggregation → Converged Metro → DCI across the top; ELS over 6500 over RLS below | `?layout=4` |
+| Option 5, Photonic in the Center | Route/switch · RLS over 6500 photonic · Waveserver/WSAi over 6500-D7 · DCOM/Outdoor | `?layout=5` |
+| Option 6, Portfolio Vertical Slices | One rack each: Access+TDM · Aggregation · Converged Metro · ELS · 6500 photonic · 6500 services · RLS · Waveserver · DCOM/Outdoor | `?layout=6` |
 
 Racks never move; whole sections (devices, signs, placards, fibers, fiber ring) move
-between them. In every option the RLS / Converged Metro section is on A5–A7, the most
+between them. In options 1–3 the RLS / Converged Metro section is on A5–A7, the most
 central three racks (A6 sits ~7.5" right of the conference-table axis).
 The options live in `RACK_LAYOUTS` in `index.html`,
 outside the generated `LAB-RACKS` block, so regenerating the inventory keeps them.
+
+Options 4–6 instead re-place individual devices, from `tools/front-row/options.mjs`: every
+front-row device and zone sign sits at its own rack and U, and the back row (B2–B8) never
+changes. Zone signs are sized exactly as in options 0–3 (each fills the clear space above its
+placard, up to 9U). DCOM and Outdoor stay in A10. The RLS and 6500 rings are 5 nodes each
+(3 terminals, 2 amps): every node stays whole in one rack (its OMCs and FMT with it), in ring
+order, with a 1U name sign just below it tagged **TERMINAL** or **AMP** (options 0–3 show the
+same tagged node signs). Fibers and fiber rings follow their devices. The **Front-row
+elevation ›** link at the top right opens the flat elevation of whichever layout is showing.
+
+## Front-row elevations
+
+[`front-row/`](front-row/) has a flat A1–A10 front elevation for each of the seven layouts
+plus a comparison page (story, U used/free per rack, room to grow, trade-offs). They come from
+`tools/front-row/options.mjs`: options 4–6 directly, Current and options 1–3 as today's plan
+re-ordered by the same rack blocks as `RACK_LAYOUTS` (the check keeps the two in step).
+After changing them:
+
+```bash
+node tools/front-row/check.mjs   # all 7 layouts: every device once, no overlaps, every rack <= 58U,
+                                 # every node whole, in order, with its sign; DCOM + Outdoor placed
+node tools/front-row/check.mjs --selftest   # proves the check catches broken layouts
+node tools/front-row/gen.mjs     # redraw front-row/*.svg and front-row/index.html
+```
 
 ## Lab rack data
 
 The racks, zone signs, fiber rings and RLS name plates are baked into `index.html` from the
 EBC layout in the [na-sales-lab](https://github.com/ciena-corp/na-sales-lab) inventory YAML
-(`provisioner/inventory/`). To refresh after an inventory change:
+(`provisioner/inventory/`); options 4–6 take front-row positions and zone signs from
+`tools/front-row/options.mjs` instead, and every layout takes its ring-node signs from it. To refresh after an inventory change:
 
 ```bash
 node tools/gen-rack-layout.mjs        # fetches ../lab and reads origin/main

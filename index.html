@@ -21,6 +21,15 @@
     }
     #hud .logo { font-size: 30px; font-weight: 700; letter-spacing: 4px; color: #e4002b; }
     #hud .sub  { font-size: 13px; font-weight: 400; letter-spacing: 2px; opacity: 0.85; margin-top: 2px; }
+    /* Link to the front-row elevation mock-ups (front-row/index.html). */
+    #docs-link {
+      position: fixed; top: 22px; right: 26px; z-index: 12;
+      font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif; font-size: 13px;
+      font-weight: 600; letter-spacing: 1px; color: #eaf1f8; text-decoration: none;
+      padding: 8px 14px; border-radius: 16px; background: rgba(14,20,29,0.80);
+      border: 1px solid rgba(120,170,230,0.22);
+    }
+    #docs-link:hover { background: rgba(47,143,230,0.25); border-color: rgba(47,143,230,0.6); }
     #hint {
       position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 10;
       font-family: "Segoe UI", system-ui, sans-serif; font-size: 12px; letter-spacing: 1px;
@@ -197,6 +206,7 @@
     <div class="logo">CIENA</div>
     <div class="sub">EXECUTIVE BRIEFING CENTER</div>
   </div>
+  <a id="docs-link" href="front-row/" title="Front elevation of racks A1–A10 for the layout showing">Front-row elevation ›</a>
   <div id="hint">drag to orbit · scroll to zoom · right-drag to pan · ← / → rack layout</div>
   <div id="layout-bar" role="group" aria-label="Rack layout">
     <button data-step="-1" title="Previous layout (←)" aria-label="Previous layout">‹</button>
@@ -289,6 +299,8 @@
     import { Line2 } from 'three/addons/lines/Line2.js';
     import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
     import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+    import { OPTIONS as FRONT_ROW_OPTIONS, TODAY as FRONT_ROW_TODAY, RACKS as FRONT_RACKS,
+             PLACARD_U, UNITS as FRONT_ROW_UNITS, height as productU } from './tools/front-row/options.mjs';
 
     // -----------------------------------------------------------------------
     // Units & configuration  (internal units = metres; defaults given in feet)
@@ -652,6 +664,8 @@
     // -----------------------------------------------------------------------
     // Baked EBC layout (front row A1–A10, back row B2–B8), generated from the na-sales-lab
     // inventory YAML by tools/gen-rack-layout.mjs — run `node tools/gen-rack-layout.mjs` to refresh.
+    // Layouts 0–3 re-order its front-row sections; 4–6 re-place its devices per
+    // tools/front-row/options.mjs (see RACK_LAYOUTS).
     /* LAB-RACKS-START */
     // na-sales-lab @ c134f01b EBC layout: Outdoor placard down 16 U, DCOM placard in its old spot (#156)
     const LAB_RACKS = {
@@ -695,6 +709,11 @@
         blocks: [[10], [1], [5, 6], [2, 3, 4], [7, 8, 9]] },
       { name: 'Option 3 · Aggregation left', desc: 'ELS · Outdoor · TDM · RLS · 6500',
         blocks: [[5, 6], [10], [1], [2, 3, 4], [7, 8, 9]] },
+      // Options 4–6 (?layout=4..6) re-arrange individual devices instead of whole sections:
+      // tools/front-row/options.mjs places every front-row device, zone sign and ring-node
+      // sign at its own rack and U. Its OPTIONS list all 7 entries in bar order (the 4 above
+      // are its SECTION_LAYOUTS, which tools/front-row/check.mjs keeps equal to these).
+      ...FRONT_ROW_OPTIONS.filter(o => !o.blocks),
     ];
     // A copy of LAB_RACKS with the front row re-ordered per `layout` (old order → new order).
     function remapLabRacks(layout) {
@@ -711,6 +730,62 @@
       const placards = (LAB_RACKS.placards || []).map(p => ({ ...p, rack: mapId(p.rack) }));
       return { racks, zones, fibers: LAB_RACKS.fibers, rings: LAB_RACKS.rings, placards };
     }
+
+    // Options 4–6: the baked front-row devices are today's plan, so match each to its
+    // options.mjs entry by rack + U. Devices in a unit (a ring node with its OMCs/FMT, an
+    // RLS-300 node, a D7 + FMT) are keyed by unit + part index, so a node keeps its own named
+    // parts; the rest go in per-product queues (in TODAY order) and an option takes the k-th
+    // device of a product for its k-th loose entry of it. Fibers and rings (keyed by device
+    // name) follow the devices.
+    const frontDeviceOf = (() => {
+      const byUnit = new Map(), byProduct = new Map(), seen = {};
+      for (const it of FRONT_ROW_TODAY.items) {
+        const d = LAB_RACKS.racks[it.rack]?.devices.find(dv => dv.ru === it.u && dv.h === productU(it.product))
+          || (console.warn(`front row: no baked device for ${it.product} at ${it.rack} U${it.u}`),
+              { name: `${it.product} ${it.rack} U${it.u}`, state: 'planned' });
+        if (it.unit) byUnit.set(`${it.unit}#${seen[it.unit] = (seen[it.unit] ?? -1) + 1}`, d);
+        else { if (!byProduct.has(it.product)) byProduct.set(it.product, []); byProduct.get(it.product).push(d); }
+      }
+      return { byUnit, byProduct };
+    })();
+
+    const nodeSignsOf = (plan) =>
+      (plan.signs || []).map(sg => ({ unit: sg.unit, role: FRONT_ROW_UNITS[sg.unit].role, rack: sg.rack, ru: sg.u }));
+
+    // LAB_RACKS with the front row laid out per an options.mjs option (layouts 4–6). Zones use
+    // the baked convention (ru = the placard's middle U), so the signs are sized exactly like
+    // the baked ones; ring-node signs come from the option.
+    function frontRowLabData(layout) {
+      const { items, placards: zonePlacards, reserved, signs } = layout.plan;
+      const racks = {};
+      for (const [id, rk] of Object.entries(LAB_RACKS.racks))
+        racks[id] = rk.row === 'front' ? { ...rk, devices: [], reserved: [] } : rk;
+      const queues = new Map([...frontDeviceOf.byProduct].map(([p, ds]) => [p, [...ds]]));
+      const partIdx = {};
+      // Unit parts in top-down order, so part k of a unit maps to part k of today's unit.
+      for (const it of [...items].sort((a, b) => b.u - a.u)) {
+        const d = it.unit
+          ? frontDeviceOf.byUnit.get(`${it.unit}#${partIdx[it.unit] = (partIdx[it.unit] ?? -1) + 1}`)
+          : queues.get(it.product).shift();
+        racks[it.rack].devices.push({ name: d.name, ru: it.u, h: productU(it.product), state: d.state });
+      }
+      for (const r of reserved) racks[r.rack].reserved.push({ ru: r.u, h: r.h, label: r.label });
+      const zones = zonePlacards.map(z => ({
+        rackStart: z.rack, rackEnd: FRONT_RACKS[FRONT_RACKS.indexOf(z.rack) + z.span - 1],
+        label: z.label, ru: z.u + Math.floor(PLACARD_U / 2), h: PLACARD_U,
+      }));
+      const nodeSigns = nodeSignsOf(layout.plan);
+      // alignLower: false — the baked layout's shared lower-section sign band only fits the
+      // section-reorder layouts; here each zone sign sits in its own clear gap.
+      return { racks, zones, fibers: LAB_RACKS.fibers, rings: LAB_RACKS.rings, placards: [], nodeSigns, alignLower: false };
+    }
+    // Layouts 0–3 re-order sections; every layout takes its ring-node signs from options.mjs
+    // (OPTIONS is in bar order), in place of the baked RLS name plates.
+    const labDataFor = (i) => {
+      const L = RACK_LAYOUTS[i];
+      if (!L.blocks) return frontRowLabData(L);
+      return { ...remapLabRacks(L), placards: [], nodeSigns: nodeSignsOf(FRONT_ROW_OPTIONS[i].plan) };
+    };
     const layoutParam = parseInt(new URLSearchParams(location.search).get('layout'), 10);
     let rackLayoutIdx = (layoutParam >= 0 && layoutParam < RACK_LAYOUTS.length) ? layoutParam : 0;
 
@@ -784,6 +859,43 @@
       tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
       return new THREE.Mesh(new THREE.PlaneGeometry(wM, hM),
         new THREE.MeshBasicMaterial({ map: tex }));                // opaque (no transparent flag)
+    }
+
+    // Ring-node name sign: dark plate (it sits between light-gray shelves) with the node name,
+    // and a coloured role tag on the right (blue TERMINAL, orange AMP, gray RLS-300) — the same
+    // look as the SVG elevations.
+    const ROLE_COLOR = { Terminal: '#0056b4', Amp: '#c2410c', 'RLS-300': '#4b5563' };
+    function makeNodeSign(name, role, wM, hM) {
+      const cv = document.createElement('canvas');
+      cv.height = 96; cv.width = Math.min(4096, Math.round(96 * wM / hM));
+      const ctx = cv.getContext('2d'), W = cv.width, Hc = cv.height, tagW = W * 0.36;
+      ctx.fillStyle = '#1b2838'; ctx.fillRect(0, 0, W, Hc);
+      ctx.fillStyle = ROLE_COLOR[role] || '#4b5563'; ctx.fillRect(W - tagW, 0, tagW, Hc);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffffff'; ctx.font = '800 66px "Segoe UI", Arial, sans-serif';
+      ctx.fillText(name, (W - tagW) / 2, Hc / 2 + 3);
+      ctx.font = '800 50px "Segoe UI", Arial, sans-serif';
+      ctx.fillText(role.toUpperCase(), W - tagW / 2, Hc / 2 + 3);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+      return new THREE.Mesh(new THREE.PlaneGeometry(wM, hM), new THREE.MeshBasicMaterial({ map: tex }));
+    }
+
+    // Reserved rack space: opaque dark plate, dashed amber border, amber text ('A: B' → 2 lines).
+    function makeReservedPanel(text, wM, hM) {
+      const cv = document.createElement('canvas');
+      cv.width = 512; cv.height = Math.max(64, Math.round(512 * hM / wM));
+      const ctx = cv.getContext('2d'), W = cv.width, Hc = cv.height;
+      ctx.fillStyle = '#141c26'; ctx.fillRect(0, 0, W, Hc);
+      ctx.strokeStyle = '#f6a623'; ctx.lineWidth = 8; ctx.setLineDash([28, 18]);
+      ctx.strokeRect(6, 6, W - 12, Hc - 12);
+      ctx.fillStyle = '#f6a623'; ctx.font = '700 46px "Segoe UI", Arial, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const lines = text.split(': ');
+      lines.forEach((l, i) => ctx.fillText(l, W / 2, Hc / 2 + (i - (lines.length - 1) / 2) * 58));
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+      return new THREE.Mesh(new THREE.PlaneGeometry(wM, hM), new THREE.MeshBasicMaterial({ map: tex }));
     }
 
     // ---- Presentation slides (conference-room flat panel) ----------------
@@ -987,7 +1099,7 @@
       // The 6500/ELS/RLS lower-section signs share ONE aligned band — the clear gap
       // common to their racks, capped by the tightest section (RLS, under the 8192s).
       const ALIGNED = new Set(['6500', 'ELS', 'RLS', 'TDM']);
-      const lowerZones = labData.zones.filter(z => ALIGNED.has(z.label));
+      const lowerZones = labData.alignLower === false ? [] : labData.zones.filter(z => ALIGNED.has(z.label));
       let alignedBand = null;
       if (lowerZones.length) {
         const occ = new Array(60).fill(false);
@@ -1031,6 +1143,7 @@
         g.add(led);
       }
       addSectionDownlight('6500');
+      for (const z of labData.zones) if (z.label.startsWith('6500 ')) addSectionDownlight(z.label);
 
       // Fiber spans: a glowing patch-cable between two named devices, bowed toward the glass.
       for (const f of labData.fibers) {
@@ -1068,6 +1181,29 @@
         const plate = makeBigLabel(pl.label, wM, hM);
         plate.position.set(x, RACK_PLINTH + (pl.ru - 1 + 0.5) * U_M, z + DEV_FRONT + 0.9 * IN);
         plate.name = `Placard:${pl.name}`;
+        g.add(plate);
+      }
+
+      // Options 4–6: reserved space (e.g. for Waveserver E-Series) as an opaque dark plate with a
+      // dashed amber border on the rack face, so it reads through the glass like the signs.
+      for (const [id, rk] of Object.entries(labData.racks)) {
+        for (const r of rk.reserved || []) {
+          const plate = makeReservedPanel(r.label, 19 * IN, r.h * U_M - 0.2 * IN);
+          plate.position.set(xOfOrder(rk.order), RACK_PLINTH + (r.ru - 1) * U_M + r.h * U_M / 2, frontRackZ + DEV_FRONT);
+          plate.name = `Reserved:${id}`;
+          g.add(plate);
+        }
+      }
+      // Ring-node name signs (every layout) — a 1U plate (19" x 1U, the size of a 1U shelf face) on
+      // the rack face in the U just below each RLS / 6500 ring node (and the RLS-300 pair): the
+      // node name plus a TERMINAL / AMP tag, so each ring reads as 3 terminals + 2 amps. They
+      // sit on the rack face, behind the zone signs' plane, and don't affect zone sign sizing.
+      for (const ns of (labData.nodeSigns || [])) {
+        const rk = labData.racks[ns.rack];
+        if (!rk) continue;
+        const plate = makeNodeSign(ns.unit, ns.role, 19 * IN, U_M - 0.18 * IN);
+        plate.position.set(xOfOrder(rk.order), RACK_PLINTH + (ns.ru - 1 + 0.5) * U_M, frontRackZ + DEV_FRONT);
+        plate.name = `NodeSign:${ns.unit}`;
         g.add(plate);
       }
 
@@ -1391,7 +1527,7 @@
     }
     buildTable();
     placeChairs();
-    let labGroup = buildLab(remapLabRacks(RACK_LAYOUTS[rackLayoutIdx]));
+    let labGroup = buildLab(labDataFor(rackLayoutIdx));
     buildRightRoom();
     buildConfScreen();
     buildCeilingLights();
@@ -1561,7 +1697,7 @@
         m.map?.dispose(); m.dispose();
       }
       rackLayoutIdx = i;
-      labGroup = buildLab(remapLabRacks(RACK_LAYOUTS[i]));
+      labGroup = buildLab(labDataFor(i));
       updateLayoutBar();
       if (keepRing) setFiberRing(true); else if (keepSpot) setSpotlightMode(true);
       const url = new URL(location.href);
@@ -1582,6 +1718,8 @@
       layoutBar.querySelector('.name').textContent = `${rackLayoutIdx + 1} / ${RACK_LAYOUTS.length} · ${L.name}`;
       layoutBar.querySelector('.desc').textContent = L.desc;
       layoutDots.forEach((d, i) => d.classList.toggle('on', i === rackLayoutIdx));
+      // Link this layout's elevation (OPTIONS is in bar order).
+      document.getElementById('docs-link').href = `front-row/#${FRONT_ROW_OPTIONS[rackLayoutIdx].key}`;
     }
     const stepLayout = (dir) =>
       setRackLayout((rackLayoutIdx + dir + RACK_LAYOUTS.length) % RACK_LAYOUTS.length);
