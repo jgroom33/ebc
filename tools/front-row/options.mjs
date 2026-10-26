@@ -4,6 +4,8 @@
 // bottom of a 58U rack), plus zone placards { rack, u, label, span } (3U, spanning `span`
 // racks from `rack`) and marked reserved space { rack, u, h, label }. Heights come from
 // PRODUCTS. tools/front-row/check.mjs proves each option places exactly TODAY's devices.
+// index.html imports this file directly for its ‹ / › rack-layout bar (`name`, `desc` are
+// the bar's text), so keep it plain browser-loadable JS with no Node imports.
 
 export const RACK_U = 58;
 export const RACKS = ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10'];
@@ -260,6 +262,7 @@ export const TODAY = parseToday(TODAY_TEXT);
 export const OPTIONS = [
   {
     key: 'option-0-today', title: "Today's plan", short: 'Reference',
+    name: "Today's plan", desc: 'Packet over optical, rack by rack',
     plan: TODAY,
     story: [
       'A1: Access on top, TDM underneath.',
@@ -281,6 +284,7 @@ export const OPTIONS = [
   },
   {
     key: 'option-1-access-to-core', title: 'Option 1: Access to Core', short: 'Access to Core',
+    name: 'Option 1 · Access to Core', desc: 'Access → Core · ELS / 6500 / RLS',
     plan: option1(),
     story: [
       'Top band, left to right: Access (A1), TDM (A2), Aggregation (A3–A4), Converged Metro (A5–A8), Datacenter Interconnect (A9).',
@@ -302,6 +306,7 @@ export const OPTIONS = [
   },
   {
     key: 'option-2-photonic-center', title: 'Option 2: Photonic in the Center', short: 'Photonic center',
+    name: 'Option 2 · Photonic Center', desc: 'Packet · RLS over 6500 · Services',
     plan: option2(),
     story: [
       'Left, route/switch: Access over TDM (A1), Aggregation (A2), Converged Metro (A3–A4).',
@@ -325,6 +330,7 @@ export const OPTIONS = [
   },
   {
     key: 'option-3-vertical-slices', title: 'Option 3: Portfolio Vertical Slices', short: 'Vertical slices',
+    name: 'Option 3 · Vertical Slices', desc: 'One rack per product line',
     plan: option3(),
     story: [
       'One rack per product line, left to right: Access + TDM (A1), Aggregation (A2), Converged Metro (A3), ELS (A4), 6500 photonic over services (A5), RLS (A6), Waveserver (A7).',

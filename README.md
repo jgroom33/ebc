@@ -5,8 +5,8 @@ A real-time 3D rendering of an Executive Briefing Center conference room, built 
 hallway, and the far side of the hallway is a **second glass wall of equal length** —
 so you can see straight through: room → glass → hallway → glass → beyond.
 
-Orbit with the mouse to inspect it. The whole thing is a **single, self-contained
-`index.html`** (three.js loads from a CDN), so it runs on GitHub Pages with no build step.
+Orbit with the mouse to inspect it. The whole thing is a **single `index.html`** (three.js loads from a CDN; the front-row
+layouts load from `tools/front-row/options.mjs`), so it runs on GitHub Pages with no build step.
 
 ## What's in the scene
 
@@ -37,33 +37,27 @@ python3 -m http.server 8000   # then open http://localhost:8000
 
 ## Rack layout options
 
-Alternative front-row arrangements, all with the **RLS centred**. Step through them live
-with the **‹ / ›** bar at the bottom of the screen (or the ← / → keys), or link straight to one.
-Spotlight and Fiber Ring stay on across a switch, so you can watch them move:
+Four front-row (A1–A10) arrangements. Step through them live with the **‹ / ›** bar at the
+top of the screen (or the ← / → keys), or link straight to one. Spotlight and Fiber Ring
+stay on across a switch, so you can watch them move:
 
 | Layout | Front row (A1 → A10) | Link |
 | --- | --- | --- |
-| Current | TDM · RLS · ELS · 6500 · Outdoor | `?layout=0` |
-| Option 1, optical core | TDM · 6500 · **RLS** · ELS · Outdoor | `?layout=1` |
-| Option 2, edge → core | Outdoor · TDM · ELS · **RLS** · 6500 | `?layout=2` |
-| Option 3, aggregation left | ELS · Outdoor · TDM · **RLS** · 6500 | `?layout=3` |
+| Today's plan | Access/TDM · Converged Metro/RLS · Aggregation/ELS · DCI/6500 · Outdoor | `?layout=0` |
+| Option 1, Access to Core | Access → TDM → Aggregation → Converged Metro → DCI across the top; ELS over 6500 over RLS below | `?layout=1` |
+| Option 2, Photonic in the Center | Route/switch · RLS over 6500 photonic · Waveserver/WSAi over 6500-D7 · Outdoor | `?layout=2` |
+| Option 3, Portfolio Vertical Slices | One rack each: Access+TDM · Aggregation · Converged Metro · ELS · 6500 · RLS · Waveserver | `?layout=3` |
 
-Racks never move; whole sections (devices, signs, placards, fibers, fiber ring) move
-between them. In every option the RLS / Converged Metro section is on A5–A7, the most
-central three racks (A6 sits ~7.5" right of the conference-table axis).
-The options live in `RACK_LAYOUTS` in `index.html`,
-outside the generated `LAB-RACKS` block, so regenerating the inventory keeps them.
+Each option places every front-row device and 3U zone sign at its own rack and U; the back
+row (B2–B8) never changes. Fibers, fiber rings and the RLS name placards follow their
+devices. The **Front-row elevation ›** link at the top right opens the current option's
+flat elevation.
 
 ## Front-row elevations
 
-[`front-row/`](front-row/) has flat front elevations of the customer-facing row, racks
-A1–A10, for today's plan and three re-arrangements (Access to Core, Photonic in the Center,
-Portfolio Vertical Slices), plus a comparison page (story, U used/free per rack, room to grow,
-trade-offs). The **Front-row elevations ›** link at the top right of the 3D scene opens it.
-These are separate from the 3D switcher's layouts above: they move individual devices, not
-whole sections.
-
-The layouts live in `tools/front-row/options.mjs`. After changing them:
+The layouts live in `tools/front-row/options.mjs`, the single source for both the 3D scene
+(which imports it) and [`front-row/`](front-row/): a flat front elevation per option plus a
+comparison page (story, U used/free per rack, room to grow, trade-offs). After changing them:
 
 ```bash
 node tools/front-row/check.mjs   # every device placed once, no overlaps, every rack <= 58U
