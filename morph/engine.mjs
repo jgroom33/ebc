@@ -397,7 +397,10 @@ export function createMorph(model, { log = console } = {}) {
     net.add(nm.group);
     const label = textSprite(n.name, 0.075, { accent: n.layer === 'tr' ? '#9aa0ad' : '#dc0000' });
     label.material.depthTest = false; label.renderOrder = 10; // never hidden behind another node
-    if (n.layer === 'ph') label.center.set(0.5, 1); // photonic labels hang in front, clear of the transport layer above
+    // Photonic labels hang in front of their node, clear of the transport layer above. An amp sits
+    // on a span at the ring's side, under the drops of the Waveserver in front of it, so its label
+    // is set to the outside (left of a left-hand amp, right of a right-hand one).
+    if (n.layer === 'ph') label.center.set(n.type === 'amp' ? (n.pos[0] < 0 ? 1 : 0) : 0.5, 1);
     net.add(label);
     nodes[n.id] = { n, ...nm, base: nodeBase(n), cur: nodeBase(n), label, c: 0 };
   }
@@ -442,8 +445,8 @@ export function createMorph(model, { log = console } = {}) {
     net.add(g);
     const captions = Object.fromEntries(Object.entries(VIEWS).map(([v, V]) => {
       const sp = textSprite(V.layers[k], 0.07, { bg: 'rgba(10,14,20,0.6)', fg: '#cfe0f1', weight: 600 });
-      sp.center.set(1, 0); // just outside the slab's left edge, clear of every node and label
-      sp.position.set(DIORAMA.x - (w / 2) * S - 0.03, g.position.y + 0.02, DIORAMA.z);
+      sp.center.set(1, 0); // just outside the slab's front-left corner, clear of every node and label
+      sp.position.set(DIORAMA.x - (w / 2) * S - 0.03, g.position.y + 0.02, DIORAMA.z + (d / 2) * S);
       net.add(sp);
       return [v, sp];
     }));
@@ -627,8 +630,10 @@ export function createMorph(model, { log = console } = {}) {
       nd.mats.forEach((mm) => setAlpha(mm, c));
       const la = smooth(...ph.labels, t) * c;
       nd.label.visible = la > 0.003; setAlpha(nd.label.material, la);
-      if (nd.n.layer === 'ph') nd.label.position.copy(nd.cur).add(_v.set(0, 0.01, nd.width * 0.75));
-      else nd.label.position.copy(nd.cur).setY(nd.cur.y + nd.height + 0.02);
+      if (nd.n.layer === 'ph') {
+        const side = nd.n.type === 'amp' ? Math.sign(nd.n.pos[0]) * nd.width * 0.55 : 0;
+        nd.label.position.copy(nd.cur).add(_v.set(side, 0.01, nd.width * (side ? 0.5 : 0.75)));
+      } else nd.label.position.copy(nd.cur).setY(nd.cur.y + nd.height + 0.02);
     }
     // slabs grow, captions appear
     const lab_ = smooth(...ph.labels, t);

@@ -265,9 +265,10 @@
 
     // ---- One frame ----
     let lastS = 0, swapDir = 'rls';
+    let stillMode = false; // MORPH.still(): in capture mode too, draw the given t / s, not the sequence
     function frame(time, dt) {
       let shot = null;
-      if (state.seqStart !== null || CAPTURE) {
+      if (state.seqStart !== null || (CAPTURE && !stillMode)) {
         const q = seqAt(state.seqSec);
         state.t = q.t; state.s = q.s; state.sTarget = q.s >= 0.5 ? 1 : 0;
         shot = q;
@@ -388,12 +389,18 @@
       THREE, scene, camera, renderer, model, morph, state, SEQ_LEN, seqAt,
       setT, setView, setCam, startSequence, stopSequence, record,
       // Render one frame of the scripted sequence at `sec` (capture mode), deterministic.
-      renderAt(sec) { state.seqSec = sec; frame(sec, 0); },
+      renderAt(sec) { stillMode = false; state.seqSec = sec; frame(sec, 0); },
       // Render a still at a given t / s (sequence stopped), e.g. for screenshots.
       still({ t, s, cam = 'path' }) {
-        stopSequence(); state.playDir = 0; setCam(cam);
+        stopSequence(); state.playDir = 0; setCam(cam); stillMode = true;
         setT(t); state.s = s; state.sTarget = s >= 0.5 ? 1 : 0; lastS = s;
         frame(performance.now() / 1000, 0);
+      },
+      // Renderer memory counters, for the capture's per-batch log.
+      info() {
+        const { memory, programs } = renderer.info, m = performance.memory;
+        return { geometries: memory.geometries, textures: memory.textures, programs: programs.length,
+          heapMB: m ? Math.round(m.usedJSHeapSize / 1048576) : null };
       },
     };
   </script>
