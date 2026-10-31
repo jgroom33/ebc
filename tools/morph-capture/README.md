@@ -56,3 +56,7 @@ sequence as a PNG data URL outside capture mode.
 `portrait-measure.mjs <root> <outdir> [sec ...]` snapshots both phones in portrait without the HUD and
 reports how much of the height (and width) the network fills; P_SPREAD / P_PITCH / P_FOV env vars try other
 portrait settings.
+
+`rotate-check.mjs <root> <outdir>` checks the rotate panel on iPhone 15 and Pixel 8: upright shows only the
+panel (no frames rendered, loop paused); a live turn to landscape plays on from the same second; turning back
+pauses again; opened in landscape it plays; a narrow non-touch window still shows the scene.

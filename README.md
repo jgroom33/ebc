@@ -151,6 +151,10 @@ and what rides on it forward.
   off along its line of sight), so the room and the whole diorama with its captions fit the width at
   every moment of the loop. The story caption wraps under the scene (one line on a phone on its side,
   with the view lifted above it); the legend sits small, top left. A tap pauses / resumes the loop.
+  **A phone held upright** shows a "Turn your phone sideways to watch" panel instead of the scene (iOS
+  Safari can't lock orientation): nothing renders and the loop pauses, then carries on from the same
+  point once the phone is turned. A narrow desktop window (no touch) still shows the scene, and for
+  a window taller than wide it uses the portrait fit below:
   **Portrait** fills the height too: as the network forms the three layers spread up to ten times
   further apart (drops and links stretch with them, still vertical) and the camera looks down 15°
   more steeply through a 22° telephoto view from further back (the layers keep one size), still at

@@ -62,6 +62,24 @@
       font: 14px "Segoe UI", system-ui, sans-serif; transition: opacity 0.6s ease;
     }
     #loader.hidden { opacity: 0; pointer-events: none; }
+
+    /* Phones watch in landscape: held upright, a touch phone gets this panel instead of the scene (the
+       scene stops rendering and the loop pauses until the phone is turned). Same query as ROTATE_QUERY. */
+    #rotate {
+      position: fixed; inset: 0; z-index: 30; display: none; flex-direction: column; gap: 22px;
+      align-items: center; justify-content: center; padding: 32px; text-align: center;
+      background: radial-gradient(120% 80% at 50% 40%, #162131 0%, #0b0f14 70%);
+      color: #eaf1f8; font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+      touch-action: none; user-select: none; -webkit-user-select: none;
+    }
+    #rotate svg { width: 132px; height: 132px; }
+    #rotate .phone { transform-origin: 60px 60px; animation: turn 2.6s ease-in-out infinite; }
+    #rotate .msg { font-size: 19px; font-weight: 600; letter-spacing: 0.2px; line-height: 1.35; max-width: 18em; text-wrap: balance; }
+    #rotate .sub { font-size: 13px; color: #9fb3c8; letter-spacing: 0.4px; }
+    #rotate .bar { width: 44px; height: 4px; border-radius: 2px; background: #e4002b; }
+    @keyframes turn { 0%, 18% { transform: rotate(0deg); } 50%, 82% { transform: rotate(-90deg); } 100% { transform: rotate(0deg); } }
+    @media (prefers-reduced-motion: reduce) { #rotate .phone { animation: none; transform: rotate(-90deg); } }
+    @media (pointer: coarse) and (orientation: portrait) and (max-width: 600px) { body:not(.capture) #rotate { display: flex; } }
   </style>
 
   <!-- three.js from CDN (no build step); same version as index.html -->
@@ -77,6 +95,20 @@
 <body>
   <div id="app"></div>
   <div id="loader">Building the room…</div>
+  <div id="rotate" role="dialog" aria-live="polite" aria-label="Turn your phone sideways to watch">
+    <svg viewBox="0 0 120 120" aria-hidden="true">
+      <path d="M22 86 a42 42 0 0 1 4 -54" fill="none" stroke="#e4002b" stroke-width="3" stroke-linecap="round" opacity="0.85"/>
+      <path d="M20 36 l6 -6 l4 8" fill="none" stroke="#e4002b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+      <g class="phone">
+        <rect x="42" y="22" width="36" height="76" rx="7" fill="#1b2838" stroke="#eaf1f8" stroke-width="3"/>
+        <rect x="47" y="31" width="26" height="54" rx="2" fill="#2f8fe6" opacity="0.35"/>
+        <circle cx="60" cy="91" r="2.6" fill="#eaf1f8"/>
+      </g>
+    </svg>
+    <div class="bar"></div>
+    <div class="msg">Turn your phone sideways to watch</div>
+    <div class="sub">EBC room → network</div>
+  </div>
 
   <nav id="tabs" class="ui" aria-label="Focus on a line system">
     <button data-focus="all" class="on">All<small>one network</small></button>
@@ -145,10 +177,32 @@
     // spread: layer spacing (1 = CAL); pitch: extra degrees down on the network shots. Both blend in as the
     // network forms (t), so the room shot and the drops stay as they are; yaw never changes.
     const PORTRAIT_FIT = { spread: 10, pitch: 15, fov: 22 };
+    // Held upright, a touch phone shows the #rotate panel (same query as its CSS): nothing renders and the
+    // loop pauses until the phone is turned sideways, then it carries on from the same point.
+    const ROTATE_QUERY = matchMedia('(pointer: coarse) and (orientation: portrait) and (max-width: 600px)');
+    let rotateBlocked = false, resumeAfterRotate = false, rotateReady = false;
+    function checkRotate() {
+      if (!rotateReady) return;
+      const blocked = !CAPTURE && ROTATE_QUERY.matches;
+      if (blocked === rotateBlocked) return;
+      rotateBlocked = blocked;
+      renderer.domElement.style.visibility = blocked ? 'hidden' : '';
+      if (blocked) {
+        resumeAfterRotate = state.seqStart !== null;
+        if (resumeAfterRotate) stopSequence();
+        state.playDir = 0;
+      } else {
+        prev = performance.now();
+        if (resumeAfterRotate) resumeLoop();
+        resumeAfterRotate = false;
+      }
+    }
+    ROTATE_QUERY.addEventListener('change', () => checkRotate());
     const isMobile = (w, h) => !CAPTURE && ((matchMedia('(pointer: coarse)').matches && Math.min(w, h) <= 600) || w <= 600);
     function fit() {
       const w = innerWidth, h = innerHeight;
       MOBILE = isMobile(w, h); PORTRAIT = MOBILE && h > w;
+      checkRotate();
       document.body.classList.toggle('mobile', MOBILE);
       if (fixedSize) {
         renderer.setPixelRatio(1);
@@ -550,6 +604,7 @@
     let prev = performance.now();
     function loop(now) {
       requestAnimationFrame(loop);
+      if (rotateBlocked) { prev = now; return; } // the rotate panel is up: draw nothing
       const dt = Math.min((now - prev) / 1000, 0.1); prev = now;
       if (state.seqStart !== null) {
         state.seqSec = (now - state.seqStart) / 1000;
@@ -564,6 +619,7 @@
     if (!CAPTURE) {
       setCam('path'); // the capture camera by default
       if (AUTOPLAY) startSequence({ loop: true });
+      rotateReady = true; checkRotate(); // a phone opened upright starts paused behind the rotate panel
       requestAnimationFrame(loop);
     } else { state.seqSec = 0; frame(0, 0); }
     document.getElementById('loader').classList.add('hidden');
@@ -580,6 +636,7 @@
         return renderer.domElement.toDataURL('image/png');
       },
       isMobile: () => MOBILE,
+      rotateBlocked: () => rotateBlocked,
       PORTRAIT_FIT, // tunable from the console: spread, pitch
       // Render a still at a given t and focus ('all', '6500', 'rls', 'els'; sequence stopped).
       still({ t, focus = 'all', cam = 'path' }) {
