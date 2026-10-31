@@ -17,7 +17,7 @@ export const LAYOUT_1 = { name: 'Option 1 · Optical core', blocks: [[1], [7, 8,
 // measured from the A4 / A5 midline (A2 = -2.5 R … A7 = +2.5 R). z is ring depth, in front of the racks.
 export const R = (27 * 0.0254) / 0.15;
 export const LAYERS = { // size [w, d] and centre [x, z], CAL units
-  ip: { size: [3 * R, 8], center: [1.5 * R, 0], caption: 'right' }, // the routers live in A5–A7
+  ip: { size: [3 * R, 8], center: [1.5 * R, 0], caption: 'above' }, // the routers live in A5–A7
   tr: { size: [3 * R, 6], center: [-1.5 * R, 0] }, // the Waveservers in A2 and A4
   ph: { size: [6.5 * R, 9], center: [0, 0] }, // the 6500 ring under A2–A4, the RLS ring under A5–A7
 };
@@ -26,14 +26,14 @@ export const SPREAD = 6; // CAL units between stacked layers
 export const layerY = (k) => LAYER_ORDER.indexOf(k) * SPREAD;
 export const RIBBON = { h: 1.2, y0: 0.08 }; // a span's spectrum ribbon: height, bottom edge
 
-export const VIEWS = {
+export const VIEWS = { // layers: the big two-line captions (the ring's name lives here, not on the slab)
   ws6500: {
     title: 'Routed core + Waveserver + 6500',
-    layers: { ip: 'IP / Ethernet layer', tr: 'Transport layer – Waveserver 5', ph: 'Photonic – 6500 ring' },
+    layers: { ip: 'IP / Ethernet', tr: 'Transport\nWaveserver 5', ph: 'Photonic\n6500 ring' },
   },
   wsrls: {
     title: 'Routed core + Waveserver + RLS',
-    layers: { ip: 'IP / Ethernet layer', tr: 'Transport layer – Waveserver 5', ph: 'Photonic – RLS ring' },
+    layers: { ip: 'IP / Ethernet', tr: 'Transport\nWaveserver 5', ph: 'Photonic\nRLS ring' },
   },
 };
 export const VIEW_KEYS = Object.keys(VIEWS);
@@ -64,8 +64,8 @@ export const NODES = [
 
 // Line systems: node order is the fibre order; a ring closes on its first node.
 export const PH_SYSTEMS = [
-  { name: '6500 ring', nodes: ['Canyon', 'Wind', 'Peak', 'Mountain', 'Breeze'], ring: true, label: [-1.0 * R, 4.3], views: ['ws6500'] },
-  { name: 'RLS ring', nodes: ['Americas', 'Atlantic', 'Europe', 'Asia', 'Pacific'], ring: true, label: [1.7 * R, 4.3], views: ['wsrls'] },
+  { name: '6500 ring', nodes: ['Canyon', 'Wind', 'Peak', 'Mountain', 'Breeze'], ring: true, views: ['ws6500'] },
+  { name: 'RLS ring', nodes: ['Americas', 'Atlantic', 'Europe', 'Asia', 'Pacific'], ring: true, views: ['wsrls'] },
 ];
 
 const PUR = 0x8b5cf6, BLU = 0x2d93ff;

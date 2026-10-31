@@ -196,7 +196,7 @@
     const AZ = (SEAT.pos.x - SEAT.at.x) / (SEAT.pos.z - SEAT.at.z);
     const onAzimuth = (at, dz, y, fov) => ({ pos: new THREE.Vector3(at.x + AZ * dz, y, at.z + dz), at, fov });
     const PUSH = onAzimuth(SEAT.at, 3.0 - SEAT.at.z, 1.36, 50);
-    const DIO_AT = new THREE.Vector3(dio.x, dio.y + 0.9, dio.z);
+    const DIO_AT = new THREE.Vector3(dio.x - 0.15, dio.y + 0.9, dio.z); // a little left: centres the diorama with its big captions
     const VANTAGE = onAzimuth(DIO_AT, 0.2 - DIO_AT.z, 3.7, 62); // over the near glass, above the diorama
     const orbit = (shot, deg) => {
       const p = shot.pos.clone().sub(shot.at).applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(deg));

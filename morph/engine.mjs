@@ -87,11 +87,12 @@ function canvasTex(cv) {
   t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
   return t;
 }
+// `text` may hold newlines; hM is the whole sprite's height (all lines).
 export function textSprite(text, hM, { fg = '#ffffff', bg = 'rgba(16,22,30,0.82)', weight = 700, accent = null } = {}) {
-  const cv = document.createElement('canvas');
-  const ctx = cv.getContext('2d'), fs = 64, pad = 26;
+  const cv = document.createElement('canvas'), lines = String(text).split('\n');
+  const ctx = cv.getContext('2d'), fs = 64, pad = 26, lh = 96;
   ctx.font = `${weight} ${fs}px ${FONT}`;
-  cv.width = Math.ceil(ctx.measureText(text).width + pad * 2 + (accent ? 18 : 0)); cv.height = 96;
+  cv.width = Math.ceil(Math.max(...lines.map((l) => ctx.measureText(l).width)) + pad * 2 + (accent ? 18 : 0)); cv.height = lh * lines.length;
   if (bg) {
     ctx.fillStyle = bg;
     ctx.beginPath(); ctx.roundRect(0, 0, cv.width, cv.height, 22); ctx.fill();
@@ -99,7 +100,7 @@ export function textSprite(text, hM, { fg = '#ffffff', bg = 'rgba(16,22,30,0.82)
   if (accent) { ctx.fillStyle = accent; ctx.fillRect(14, 22, 8, cv.height - 44); }
   ctx.font = `${weight} ${fs}px ${FONT}`;
   ctx.fillStyle = fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(text, cv.width / 2 + (accent ? 9 : 0), cv.height / 2 + 3);
+  lines.forEach((l, i) => ctx.fillText(l, cv.width / 2 + (accent ? 9 : 0), lh * i + lh / 2 + 3));
   const mat = fader(new THREE.SpriteMaterial({ map: canvasTex(cv), transparent: true, depthWrite: false }));
   mat.userData.noDepth = true;
   const sp = new THREE.Sprite(mat);
@@ -196,6 +197,7 @@ class Ribbon {
 
 // ---- CAL node meshes (in CAL units, scaled by S) ---------------------------------------------
 const RED = 0xdc0000;
+const CAPTION_LINE = 0.27; // metres per line of a layer caption (node labels are 0.075 m)
 const PH_H = RIBBON.y0 + RIBBON.h + 0.12;
 function nodeMesh(type) {
   const g = new THREE.Group(), mats = [];
@@ -433,11 +435,20 @@ export function createMorph(model, { log = console } = {}) {
     const edge = new THREE.LineSegments(new THREE.EdgesGeometry(slab.geometry), eMat);
     g.add(slab, edge);
     net.add(g);
+    // The layer caption: the biggest text on the diorama (readable from the back row), standing just
+    // where no node, link or label crosses it: outside the front-left corner for the photonic and
+    // transport slabs; above the back edge for the IP slab (its client drops sweep off to the left).
+    const above = LAYERS[k].caption === 'above';
     const captions = Object.fromEntries(Object.entries(VIEWS).map(([v, V]) => {
-      const sp = textSprite(V.layers[k], 0.07, { bg: 'rgba(10,14,20,0.6)', fg: '#cfe0f1', weight: 600 });
-      const right = LAYERS[k].caption === 'right'; // just outside the slab's front-left (or -right) corner
-      sp.center.set(right ? 0 : 1, 0);
-      sp.position.set(g.position.x + (right ? 1 : -1) * ((w / 2) * S + 0.08), g.position.y + 0.02, g.position.z + (d / 2) * S);
+      const text = V.layers[k], n = text.split('\n').length;
+      const sp = textSprite(text, CAPTION_LINE * n, { bg: 'rgba(10,14,20,0.7)', fg: '#eaf1f8', weight: 700 });
+      if (above) {
+        sp.center.set(0.5, 0);
+        sp.position.set(g.position.x, g.position.y + 0.3, g.position.z - (d / 2) * S);
+      } else {
+        sp.center.set(1, 0);
+        sp.position.set(g.position.x - (w / 2) * S - 0.08, g.position.y + 0.02, g.position.z + (d / 2) * S);
+      }
       net.add(sp);
       return [v, sp];
     }));
@@ -468,10 +479,6 @@ export function createMorph(model, { log = console } = {}) {
         rb.set(pa, pb);
       } });
     }
-    const lbl = textSprite(sys.name, 0.08, { bg: null, fg: '#e6edf5', weight: 800 });
-    lbl.position.set(DIORAMA.x + sys.label[0] * S, DIORAMA.y + 0.01, DIORAMA.z + sys.label[1] * S);
-    links.add(lbl);
-    cal.push({ view: sys.views[0], label: true, show: (al) => { lbl.visible = al > 0.003; setAlpha(lbl.material, al); }, update() {} });
   }
   // wavelengths: a coloured line on the ribbons at the band's height, with light pulses running along it
   for (const W_ of Object.values(WAVES)) {
