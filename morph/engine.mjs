@@ -446,7 +446,7 @@ export function createMorph(model, { log = console } = {}) {
     const captions = Object.fromEntries(Object.entries(VIEWS).map(([v, V]) => {
       const sp = textSprite(V.layers[k], 0.07, { bg: 'rgba(10,14,20,0.6)', fg: '#cfe0f1', weight: 600 });
       sp.center.set(1, 0); // just outside the slab's front-left corner, clear of every node and label
-      sp.position.set(DIORAMA.x - (w / 2) * S - 0.03, g.position.y + 0.02, DIORAMA.z + (d / 2) * S);
+      sp.position.set(DIORAMA.x - (w / 2) * S - 0.08, g.position.y + 0.02, DIORAMA.z + (d / 2) * S);
       net.add(sp);
       return [v, sp];
     }));

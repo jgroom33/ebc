@@ -27,3 +27,7 @@ so it fits a 10-minute job slot; rerun to continue). Encode the frames with ffmp
 
 Chrome RSS is summed over the process tree with `pstree -pT` (threads excluded): summing
 `/proc/<tid>/status` over threads over-counts a ~350 MB browser as ~8 GB.
+
+`rotation-probe.mjs <root> <outdir>` prints the camera's yaw / pitch / roll across the 2D-to-3D
+segment (Sequence, and scrub with the capture camera, both views) and saves frames of it; yaw
+should stay constant until the scripted orbit at 25 s.

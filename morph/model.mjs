@@ -64,9 +64,9 @@ const PUR = 0x8b5cf6, BLU = 0x2d93ff;
 export const GREY = 0x9aa1ab;
 // Wavelengths: `band` is the height on the span ribbon (0 bottom, 1 top), `at` where the rate label sits.
 export const WAVES = {
-  ws16c: { rate: '1.6T', band: 0.75, color: PUR, path: ['Canyon', 'Breeze', 'Mountain'], views: ['ws6500'] },
+  ws16c: { rate: '1.6T', band: 0.75, color: PUR, path: ['Canyon', 'Breeze', 'Mountain'], views: ['ws6500'], at: 0.14 },
   ws8c: { rate: '800G', band: 0.55, color: BLU, path: ['Canyon', 'Wind', 'Peak', 'Mountain'], views: ['ws6500'], at: 0.5 },
-  ws16r: { rate: '1.6T', band: 0.75, color: PUR, path: ['Americas', 'Pacific', 'Asia'], views: ['wsrls'] },
+  ws16r: { rate: '1.6T', band: 0.75, color: PUR, path: ['Americas', 'Pacific', 'Asia'], views: ['wsrls'], at: 0.14 },
   ws8r: { rate: '800G', band: 0.55, color: BLU, path: ['Americas', 'Atlantic', 'Europe', 'Asia'], views: ['wsrls'], at: 0.5 },
 };
 

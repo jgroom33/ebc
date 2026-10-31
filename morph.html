@@ -187,9 +187,14 @@
     // ---- Capture camera: a conference-room seat, then a dolly through the glass ----
     const dio = morph.diorama;
     const SEAT = { pos: new THREE.Vector3(-0.55, 1.32, 3.55), at: new THREE.Vector3(dio.x, 1.3, morph.rackFace), fov: 50 };
-    const PUSH = { pos: new THREE.Vector3(-0.62, 1.36, 3.0), at: SEAT.at, fov: 50 };
-    const DIO_AT = new THREE.Vector3(dio.x, dio.y + 0.8, dio.z + 0.1);
-    const VANTAGE = { pos: new THREE.Vector3(dio.x + 0.6, 3.55, -0.25), at: DIO_AT, fov: 62 }; // just through the near glass
+    // Every shot on the path keeps the seat's azimuth (yaw), so the move from the flat room view to the
+    // diorama only pitches, rises and dollies: a shot `dz` in front of its target, `y` high, sits at the
+    // x that keeps that yaw. (A vantage off the centre line swung the view ~15° on the way in.)
+    const AZ = (SEAT.pos.x - SEAT.at.x) / (SEAT.pos.z - SEAT.at.z);
+    const onAzimuth = (at, dz, y, fov) => ({ pos: new THREE.Vector3(at.x + AZ * dz, y, at.z + dz), at, fov });
+    const PUSH = onAzimuth(SEAT.at, 3.0 - SEAT.at.z, 1.36, 50);
+    const DIO_AT = new THREE.Vector3(dio.x, dio.y + 0.95, dio.z + 0.1);
+    const VANTAGE = onAzimuth(DIO_AT, 0.1 - DIO_AT.z, 3.7, 62); // just through the near glass, above the diorama
     const orbit = (shot, deg) => {
       const p = shot.pos.clone().sub(shot.at).applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(deg));
       return { pos: p.add(shot.at), at: shot.at, fov: shot.fov };
