@@ -46,7 +46,8 @@ export const PHASES = {
   signs: [0.1, 0.28],
   shell: [0.12, 0.4], // room shell fades
   racks: [0.16, 0.42], // racks and unrelated devices fade
-  ghost: [0.3, 0.55], // a faint outline of the racks stays, so you can see where things came from
+  ghost: [0.3, 0.55], // a faint outline of the racks while the devices leave, so you can see where they came from
+  ghostOut: [0.6, 0.85], // and gone before the network has formed (labels come at 0.88)
   fly: { ph: [0.3, 0.6], tr: [0.4, 0.68], ip: [0.48, 0.78] }, // staggered photonic, transport, IP
   slab: { ph: [0.56, 0.76], tr: [0.62, 0.82], ip: [0.68, 0.88] },
   handover: [0.78, 0.9], // device-to-device fibres fade, CAL links and wavelengths fade in
@@ -563,7 +564,8 @@ export function createMorph(model, { log = console } = {}) {
   function update({ t = 0, s = 0, time = 0 } = {}) {
     const pres = { ws6500: presence('ws6500', s), wsrls: presence('wsrls', s) };
     const spot = smooth(...ph.spot, t);
-    const shellA = 1 - smooth(...ph.shell, t), racksA = 1 - smooth(...ph.racks, t), ghostA = smooth(...ph.ghost, t);
+    const shellA = 1 - smooth(...ph.shell, t), racksA = 1 - smooth(...ph.racks, t);
+    const ghostA = smooth(...ph.ghost, t) * (1 - smooth(...ph.ghostOut, t));
     ch.shell.set(shellA); ch.signs.set(1 - smooth(...ph.signs, t)); ch.racks.set(racksA); ch.ghost.set(ghostA);
     // lights: the room dims for the spotlight, the diorama gets a key light
     const dio = smooth(0.4, 0.75, t);
