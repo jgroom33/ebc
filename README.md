@@ -55,8 +55,9 @@ Spotlight and Fiber Ring stay on across a switch, so you can watch them move:
 Racks never move; whole sections (devices, signs, placards, fibers, fiber ring) move
 between them. In options 1–3 the RLS / Converged Metro section is on A5–A7, the most
 central three racks (A6 sits ~7.5" right of the conference-table axis).
-The options live in `RACK_LAYOUTS` in `index.html`,
-outside the generated `LAB-RACKS` block, so regenerating the inventory keeps them.
+The options live in `RACK_LAYOUTS` in [`lab-layouts.mjs`](lab-layouts.mjs) (shared by `index.html`
+and `morph.html`, together with the lab data per layout, the zone-sign placement and the sign
+canvases), outside the generated `LAB-RACKS` block, so regenerating the inventory keeps them.
 
 Options 4–6 instead re-place individual devices, from `tools/front-row/options.mjs`: every
 front-row device and zone sign sits at its own rack and U, and the back row (B2–B8) never
@@ -122,10 +123,13 @@ It reads files with `git show`, so the lab checkout's working tree is never used
 
 ## Room → network morph (`morph.html`)
 
-[`morph.html`](morph.html) starts in the room with the **layout 1** racks and morphs them into a
-network view: the equipment flies out of the racks into a standing three-layer diorama in front of
-the rack row (photonic, transport, IP; about 0.15 m per network-view unit). Each node sits under the
-rack its device lives in, so the equipment drops (almost) straight down. Two views, switched by the
+[`morph.html`](morph.html) starts in the room with the racks in **option 9** (exactly
+`index.html?layout=9`, signs included: both pages lay the racks out with `lab-layouts.mjs`) and
+morphs them into a network view: the equipment moves out of the racks into a standing three-layer
+diorama in front of the rack row (photonic, transport, IP; about 0.15 m per network-view unit).
+Option 9's three bands are the diorama's layers, and each node sits under or over the rack its device
+lives in, so the routers rise a little from the top band, the Waveservers drop from the middle band
+and the photonic nodes drop straight down, with no sideways travel. Two views, switched by the
 tabs at the top: **wsrls** (routed core + Waveserver 5 over the RLS ring, racks A5–A7; the default) and
 **ws6500** (the same routers and Waveservers over the 6500 ring, racks A2–A4). Switching sends one
 ring home to its racks and flies the other up. `morph.html?view=ws6500` opens on the other view.
@@ -139,8 +143,8 @@ ring home to its racks and flies the other up. `morph.html?view=ws6500` opens on
   `.webm` (MediaRecorder).
 - `morph.html?capture` renders a fixed 1920×1080 frame on demand with `MORPH.renderAt(seconds)`,
   for frame-exact offline capture; `tools/morph-capture/` has the batch-safe headless capture.
-- `morph/model.mjs` holds the layout-1 racks (read from this page's generated `LAB-RACKS` block, so a
-  re-bake reaches it) and a minimal copy of the two network views (node name, layer, type and position;
+- `morph/model.mjs` holds the option-9 racks (`index.html`'s generated `LAB-RACKS` block laid out by
+  `lab-layouts.mjs`, so a re-bake or a layout change reaches it) and a minimal copy of the two network views (node name, layer, type and position;
   links; wavelength paths; layer sizes), joined by (view, device name) plus a small alias table.
   Missing joins are logged to the console. `morph/engine.mjs` is renderer-agnostic (meshes and
   sprite labels, no CSS2D), so a WebXR page can reuse it.

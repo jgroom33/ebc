@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import {
   NODES, PH_SYSTEMS, WAVES, IP_LINKS, DROPS, TR_LINKS, LAYERS, LAYER_ORDER, VIEWS, RIBBON, GREY, layerY,
 } from './model.mjs';
+import { zoneSignBands, bigLabelCanvas, nodeSignCanvas } from '../lab-layouts.mjs';
 
 // ---- Room dimensions (as index.html's CONFIG; metres) ----------------------------------------
 const FT = 0.3048, IN = FT / 12;
@@ -119,18 +120,8 @@ function labelPlane(text, wM, hM, mat) { // rack IDs
   mat.map = canvasTex(cv);
   return new THREE.Mesh(new THREE.PlaneGeometry(wM, hM), mat);
 }
-function bigSign(text, wM, hM, mat) { // zone signs, as index.html's makeBigLabel
-  const cv = document.createElement('canvas');
-  cv.width = 1024; cv.height = Math.max(128, Math.round(1024 * hM / wM));
-  const ctx = cv.getContext('2d'), w = cv.width, h = cv.height;
-  ctx.fillStyle = '#1b2838'; ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = '#e4002b'; ctx.fillRect(0, h - h * 0.09, w, h * 0.09);
-  ctx.fillStyle = '#ffffff';
-  let fs = Math.round(h * 0.62);
-  ctx.font = `700 ${fs}px ${FONT}`;
-  while (ctx.measureText(text).width > w * 0.9 && fs > 12) { fs -= 4; ctx.font = `700 ${fs}px ${FONT}`; }
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(text, w / 2, h / 2 - h * 0.02);
+// Zone and ring-node signs: the canvases index.html draws (lab-layouts.mjs), on a fading material.
+function signMesh(cv, wM, hM, mat) {
   mat.map = canvasTex(cv);
   return new THREE.Mesh(new THREE.PlaneGeometry(wM, hM), mat);
 }
@@ -378,13 +369,22 @@ export function createMorph(model, { log = console } = {}) {
       (row === 'back' ? backRow : racks).add(at(box(6 * IN - 0.2 * IN, RACK_H, RACK_D + 6 * IN, (row === 'back' ? bk : rk).mgr), (xOfOrder(orders[i]) + xOfOrder(orders[i + 1])) / 2, RACK_H / 2, z));
     }
   }
-  // ---- Zone signs (a 4U plate centred on each zone's RU) ----
+  // ---- Zone signs and ring-node signs, placed as index.html places them (lab-layouts.mjs) ----
   const signs = mk('Signs', ch.signs);
-  for (const z of lab.zones) {
+  for (const { zone: z, bottom, hRU } of zoneSignBands(lab)) {
+    if (z.label === 'Outdoor Units' || hRU < 2) continue; // as index.html: not signed / no room
     const a = xOfOrder(+z.rackStart.slice(1)), b = xOfOrder(+z.rackEnd.slice(1));
-    const left = Math.min(a, b) - RACK_W / 2, right = Math.max(a, b) + RACK_W / 2, hM = 4 * U_M;
-    const sign = bigSign(z.label, right - left, hM, ch.signs.add(new THREE.MeshBasicMaterial()));
-    signs.add(at(sign, (left + right) / 2, RACK_PLINTH + (z.ru - 1.5) * U_M + hM / 2, FRONT_Z + RACK_D / 2 + 6.5 * IN));
+    const left = Math.min(a, b) - RACK_W / 2, right = Math.max(a, b) + RACK_W / 2, hM = hRU * U_M;
+    const sign = signMesh(bigLabelCanvas(z.label, right - left, hM, { keepAspect: !!z.keepAspect }), right - left, hM,
+      ch.signs.add(new THREE.MeshBasicMaterial()));
+    signs.add(at(sign, (left + right) / 2, RACK_PLINTH + (bottom - 1) * U_M + hM / 2, FRONT_Z + RACK_D / 2 + 6.5 * IN));
+  }
+  for (const ns of lab.nodeSigns || []) { // a 1U plate in the U below each ring node
+    const rk = lab.racks[ns.rack];
+    if (!rk) continue;
+    const w = 19 * IN, h = U_M - 0.18 * IN;
+    const plate = signMesh(nodeSignCanvas(ns.unit, ns.role, w, h), w, h, ch.signs.add(new THREE.MeshBasicMaterial()));
+    signs.add(at(plate, xOfOrder(rk.order), RACK_PLINTH + (ns.ru - 1 + 0.5) * U_M, (rk.row === 'back' ? BACK_Z : FRONT_Z) + DEV_FRONT));
   }
 
   // ---- Network nodes and the devices that fly to them ----
@@ -563,14 +563,33 @@ export function createMorph(model, { log = console } = {}) {
     const fl = ring.map((n) => flyers.get(n)).filter(Boolean);
     const mat = basic(0xffe000);
     const segs = fl.map(() => new Seg(links, mat, 0.006));
-    ebc.push({ view, show: (al) => segs.forEach((sg) => sg.show(al)),
+    ebc.push({ view, ring: true, show: (al) => segs.forEach((sg) => sg.show(al)),
       update: () => fl.forEach((f, i) => segs[i].set(f.fibre, fl[(i + 1) % fl.length].fibre)) });
   }
+  // The lab's patch fibres, as index.html draws them in the room: a cable bowed 2.5 in toward the
+  // glass, dashed where the inventory says so, with its label (e.g. "(800G)") above the middle.
+  // Between two flying devices the cable follows them; the rest stay in the racks and fade with them.
+  const fibreLabel = (text) => {
+    const cv = document.createElement('canvas'); cv.width = 512; cv.height = Math.round(512 * 0.10 / 0.34);
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#cdeafe'; ctx.font = `700 52px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, cv.width / 2, cv.height / 2 + 2);
+    return new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.10), ch.racks.add(new THREE.MeshBasicMaterial({ map: canvasTex(cv), transparent: true })));
+  };
   for (const fb of lab.fibers) {
-    const fa = flyers.get(fb.a), fbb = flyers.get(fb.b);
-    if (!fa || !fbb) continue;
-    const sg = new Seg(links, basic(new THREE.Color(fb.color).getHex()), 0.006);
-    ebc.push({ view: null, show: (al) => sg.show(al), update: () => sg.set(fa.fibre, fbb.fibre) });
+    const fa = flyers.get(fb.a), fbb = flyers.get(fb.b), pa = devPos.get(fb.a), pb = devPos.get(fb.b);
+    if (!pa || !pb) continue;
+    const color = new THREE.Color(fb.color).getHex();
+    const mid = pa.clone().add(pb).multiplyScalar(0.5); mid.z += 2.5 * IN;
+    if (fb.label) racks.add(at(fibreLabel(fb.label), mid.x, mid.y + 0.12, mid.z + 0.5 * IN));
+    if (fa && fbb) {
+      const sg = new Seg(links, basic(color), 0.006);
+      ebc.push({ view: null, show: (al) => sg.show(al), update: () => sg.set(fa.fibre, fbb.fibre) });
+      continue;
+    }
+    const mat = ch.racks.add(fb.dashed ? dashed(color) : basic(color));
+    const a = pa.clone().setZ(pa.z + 2.5 * IN), b = pb.clone().setZ(pb.z + 2.5 * IN);
+    for (const [p, q] of [[a, mid], [mid, b]]) new Seg(racks, mat, 0.006, fb.dashed ? 0.1 : 0).set(p, q);
   }
 
   // ---- Per-frame evaluation ----
@@ -657,8 +676,9 @@ export function createMorph(model, { log = console } = {}) {
       }
     }
     // links: device fibres hand over to the CAL links and wavelengths
-    const ebcA = smooth(0.02, 0.1, t) * (1 - smooth(...ph.handover, t));
-    for (const l of ebc) { const a = ebcA * (l.view ? pres[l.view] : 1); l.show(a); if (a > 0.003) l.update(time); }
+    // the laser ring comes up with the spotlight; the patch fibres are there from the start, as in the room
+    const ebcA = 1 - smooth(...ph.handover, t), ringA = smooth(0.02, 0.1, t) * ebcA;
+    for (const l of ebc) { const a = (l.ring ? ringA : ebcA) * (l.view ? pres[l.view] : 1); l.show(a); if (a > 0.003) l.update(time); }
     const calA = smooth(ph.handover[0] + 0.04, ph.handover[1] + 0.04, t);
     for (const l of cal) {
       const a = (l.label ? lab_ : calA) * (l.view ? pres[l.view] : 1);

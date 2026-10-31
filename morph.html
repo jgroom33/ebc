@@ -78,7 +78,7 @@
     <button data-view="wsrls" class="on">wsrls<small>RLS ring · racks A5–A7</small></button>
     <button data-view="ws6500">ws6500<small>6500 ring · racks A2–A4</small></button>
   </nav>
-  <a id="back-link" class="ui" href="./?layout=1">‹ Room (layout 1)</a>
+  <a id="back-link" class="ui" href="./?layout=9">‹ Room (option 9)</a>
 
   <div id="keys" class="ui">← / → scrub · space play · 1 / 2 view · C camera · P sequence</div>
   <div id="bar" class="ui">
@@ -261,7 +261,7 @@
     function caption({ t, s }, swapping) {
       if (swapping === 'rls') return 'Swap the ring: the 6500 flies home, the RLS comes up (same routers, same Waveservers)';
       if (swapping === '6500') return 'Swap the ring: the RLS flies home, the 6500 comes up (same routers, same Waveservers)';
-      if (t <= 0.001) return 'The EBC lab, front-row layout 1, seen from the conference room';
+      if (t <= 0.001) return 'The EBC lab, rack layout option 9, seen from the conference room';
       if (t < 0.15) return '1 · Spotlight the equipment in this network view';
       if (t < 0.42) return '2 · The room, the racks and the other gear fade away';
       if (t < 0.8) return '3 · Each device flies to its node: photonic, transport, then IP';
@@ -270,7 +270,7 @@
     }
     function viewTitle(s) {
       const v = s < 0.5 ? 'ws6500' : 'wsrls';
-      return `${v} · ${VIEWS[v].title} · EBC racks, layout 1`;
+      return `${v} · ${VIEWS[v].title} · EBC racks, option 9`;
     }
 
     // ---- One frame ----

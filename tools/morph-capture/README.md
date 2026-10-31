@@ -37,3 +37,8 @@ lands on and the dx / dy / dz between them (optical nodes should be a near-verti
 `scrubframes.mjs <root> <outdir> <view> <t>...` saves stills of one view at given t values.
 `default-check.mjs <root> <outdir>` opens morph.html with the UI (plain and `?view=ws6500`) and
 reports the view it starts on, the highlighted tab and the sequence's start / end view.
+
+`room-match.mjs <root>` checks that the morph's room is `index.html?layout=9`: identical lab data
+and identical zone / ring-node sign rectangles. `index-baseline.mjs <root> <outdir>` dumps
+index.html's lab data and built lab (every object) for each layout, to diff before / after a change
+to `lab-layouts.mjs`. `joinlog.mjs <root>` prints the morph's CAL-node → device joins.

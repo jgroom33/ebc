@@ -1,23 +1,25 @@
-// The shared model behind morph.html (and later the WebXR page): the EBC lab racks in front-row
-// layout 1, a minimal copy of two CAL network views (ws6500, wsrls), and the join between them.
+// The shared model behind morph.html (and later the WebXR page): the EBC lab racks in rack layout
+// option 9, a minimal copy of two CAL network views (ws6500, wsrls), and the join between them.
 // No three.js here, so the desktop and headset pages can both use it.
 //
 // Racks: LAB_RACKS is read from index.html's generated LAB-RACKS block (so a re-bake of the
-// inventory reaches this page too), then re-ordered to layout 1 the same way index.html's
-// remapLabRacks does.
+// inventory reaches this page too) and laid out by lab-layouts.mjs, the same code index.html uses,
+// so the room here is index.html?layout=9 (devices, zone signs, ring-node signs).
 // Network: only {id, name, layer, type, pos}, links, wavelength paths and layer sizes / heights,
 // hand-copied from the CAL network view. Positions are CAL units on each layer's plane, [x, z].
+import { createLabLayouts } from '../lab-layouts.mjs';
 
-// Layout 1, "Optical core": TDM · 6500 · RLS · ELS · Outdoor (index.html RACK_LAYOUTS[1]).
-export const LAYOUT_1 = { name: 'Option 1 · Optical core', blocks: [[1], [7, 8, 9], [2, 3, 4], [5, 6], [10]] };
+// Option 9, "Photonic on the bottom": IP on top (U42+), transport (the Waveservers) in the middle
+// (U35–36), photonic at the bottom, across A2–A9 — the same three bands as the network view.
+export const MORPH_LAYOUT = 9;
 
 // ---- CAL subset ---------------------------------------------------------------------------
-// Node x follows the rack the device lives in, so each one drops (almost) straight down into the
-// network view: R is one rack pitch (27 in) in CAL units at the engine's S = 0.15 m per unit, and x is
-// measured from the A4 / A5 midline (A2 = -2.5 R … A7 = +2.5 R). z is ring depth, in front of the racks.
+// Node x follows the rack the device lives in, so each one moves (almost) straight up or down into
+// the network view: R is one rack pitch (27 in) in CAL units at the engine's S = 0.15 m per unit, and
+// x is measured from the A4 / A5 midline (A2 = -2.5 R … A7 = +2.5 R). z is depth, in front of the racks.
 export const R = (27 * 0.0254) / 0.15;
 export const LAYERS = { // size [w, d] and centre [x, z], CAL units
-  ip: { size: [3 * R, 8], center: [1.5 * R, 0], caption: 'above' }, // the routers live in A5–A7
+  ip: { size: [6 * R, 8], center: [0, 0], caption: 'above' }, // the routers: A2, A4 (two), A7
   tr: { size: [3 * R, 6], center: [-1.5 * R, 0] }, // the Waveservers in A2 and A4
   ph: { size: [6.5 * R, 9], center: [0, 0] }, // the 6500 ring under A2–A4, the RLS ring under A5–A7
 };
@@ -40,10 +42,10 @@ export const VIEW_KEYS = Object.keys(VIEWS);
 const BOTH = ['ws6500', 'wsrls'];
 
 export const NODES = [
-  // IP: 8192-1 in A5, 8110-1 and 8192-2 in A6, 8110-2 in A7
-  { id: 'W1', name: '8192-1', layer: 'ip', type: 'router', pos: [0.5 * R, -2.5], views: BOTH },
-  { id: 'W2', name: '8110-1', layer: 'ip', type: 'router', pos: [1.5 * R, -2.5], views: BOTH },
-  { id: 'W3', name: '8192-2', layer: 'ip', type: 'router', pos: [1.5 * R, 2.5], views: BOTH },
+  // IP (option 9's top band): 8192-1 in A2, 8110-1 and 8192-2 in A4, 8110-2 in A7
+  { id: 'W1', name: '8192-1', layer: 'ip', type: 'router', pos: [-2.5 * R, -2.5], views: BOTH },
+  { id: 'W2', name: '8110-1', layer: 'ip', type: 'router', pos: [-0.5 * R, -2.5], views: BOTH },
+  { id: 'W3', name: '8192-2', layer: 'ip', type: 'router', pos: [-0.5 * R, 2.5], views: BOTH },
   { id: 'W4', name: '8110-2', layer: 'ip', type: 'router', pos: [2.5 * R, 2.5], views: BOTH },
   // Transport: West in A2, East in A4
   { id: 'WSW', name: 'Waveserver 5 West', layer: 'tr', type: 'xpdr', pos: [-2.5 * R, 0], views: BOTH },
@@ -115,21 +117,6 @@ export const ALIASES = {
   'Waveserver 5 East': 'Waveserver-5-East-1',
 };
 
-// index.html's LAB_RACKS, re-ordered to `layout` (old display order → new), as remapLabRacks does.
-export function remapLabRacks(labRacks, layout = LAYOUT_1) {
-  const newOf = new Map();
-  layout.blocks.flat().forEach((o, i) => newOf.set(o, i + 1));
-  const mapId = (id) => (id[0] === 'A' && newOf.has(+id.slice(1))) ? 'A' + newOf.get(+id.slice(1)) : id;
-  const racks = {};
-  for (const [id, rk] of Object.entries(labRacks.racks))
-    racks[mapId(id)] = rk.row === 'front' ? { ...rk, order: newOf.get(rk.order) ?? rk.order } : rk;
-  const zones = labRacks.zones.map((z) => {
-    const a = +mapId(z.rackStart).slice(1), b = +mapId(z.rackEnd).slice(1);
-    return { ...z, rackStart: 'A' + Math.min(a, b), rackEnd: 'A' + Math.max(a, b) };
-  });
-  return { racks, zones, fibers: labRacks.fibers, rings: labRacks.rings };
-}
-
 // Pull LAB_RACKS out of index.html's generated block (between the LAB-RACKS markers).
 export function parseLabRacks(indexHtml) {
   const a = indexHtml.indexOf('/* LAB-RACKS-START */'), b = indexHtml.indexOf('/* LAB-RACKS-END */');
@@ -161,6 +148,9 @@ export function joinViews(lab, { log = console } = {}) {
 
 // Everything the morph needs, from index.html's text.
 export function buildModel(indexHtml, opts) {
-  const lab = remapLabRacks(parseLabRacks(indexHtml), LAYOUT_1);
-  return { lab, ...joinViews(lab, opts) };
+  const { RACK_LAYOUTS, layoutId, labDataFor } = createLabLayouts(parseLabRacks(indexHtml));
+  const idx = RACK_LAYOUTS.findIndex((L, i) => layoutId(i) === MORPH_LAYOUT);
+  if (idx < 0) throw new Error(`morph: no rack layout ${MORPH_LAYOUT} in lab-layouts.mjs`);
+  const lab = labDataFor(idx);
+  return { lab, layout: { id: MORPH_LAYOUT, name: RACK_LAYOUTS[idx].name }, ...joinViews(lab, opts) };
 }
