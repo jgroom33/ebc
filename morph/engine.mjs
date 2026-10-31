@@ -1,14 +1,15 @@
-// The morph engine: the EBC room with the layout-1 racks, and the same equipment as the CAL
-// network view standing in front of the rack row. One state drives everything, evaluated every
-// frame (no chained tweens), so it scrubs and reverses:
-//   t  0..1  the morph: room → network
-//   s  0..1  the view: 0 = ws6500 (6500 ring), 1 = wsrls (RLS ring)
-//   time     seconds, for the light pulses only
+// The morph engine: the EBC room with the option-9 racks, and the same equipment as one network
+// standing in front of the rack row: the 6500, RLS and ELS line systems (photonic), the Waveservers
+// and 6500-D7s riding them (transport), and the RSP routers and switches over it all (IP / Ethernet).
+// One state drives everything, evaluated every frame (no chained tweens), so it scrubs and reverses:
+//   t      0..1  the morph: room → network
+//   focus  { '6500', rls, els: 0..1 }  how strongly each line system (and what rides on it) shows
+//   time   seconds, for the light pulses only
 // Renderer-agnostic: it builds a THREE.Group and updates it. No DOM beyond canvas textures, no
 // CSS2D, no Line2 (links are meshes, labels are sprites), so a WebXR page can reuse it as is.
 import * as THREE from 'three';
 import {
-  NODES, PH_SYSTEMS, WAVES, IP_LINKS, DROPS, TR_LINKS, LAYERS, LAYER_ORDER, VIEWS, RIBBON, GREY, layerY,
+  NODES, PH_SYSTEMS, PH_JOINS, WAVES, IP_LINKS, TR_LINKS, LAYERS, LAYER_ORDER, RIBBON, GREY, DIRECT, layerY, R, SYSTEM_KEYS,
 } from './model.mjs';
 import { zoneSignBands, bigLabelCanvas, nodeSignCanvas } from '../lab-layouts.mjs';
 
@@ -31,11 +32,10 @@ const xOfOrder = (o) => X_RIGHT - PITCH * (10 - o);
 // ---- The diorama frame: CAL units → room metres ----------------------------------------------
 export const S = 0.15; // metres per CAL unit
 const DIORAMA = new THREE.Vector3(
-  (xOfOrder(4) + xOfOrder(5)) / 2, // the A4 / A5 midline: node x is measured from it, in rack pitches (model R)
+  xOfOrder(5), // A5, the middle of A1–A9; node x is its device's rack, so this only frames the camera
   0.3, // photonic layer height, below every optical shelf so each one drops into place; IP lands 1.8 m above
-  FRONT_Z + RACK_D / 2 + 0.72, // the deepest ring node (z -3.4 units) sits just in front of the rack faces
+  FRONT_Z + RACK_D / 2 + 0.72, // the deepest nodes (z -3.4 … -3.6 units) sit just in front of the rack faces
 );
-const nodeBase = (n) => new THREE.Vector3(DIORAMA.x + n.pos[0] * S, DIORAMA.y + layerY(n.layer) * S, DIORAMA.z + n.pos[1] * S);
 
 // ---- Timeline (all windows in t) -------------------------------------------------------------
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
@@ -43,20 +43,20 @@ const smooth = (a, b, x) => { const k = clamp01((x - a) / (b - a)); return k * k
 const easeInOut = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
 const lerp = (a, b, k) => a + (b - a) * k;
 export const PHASES = {
-  spot: [0.0, 0.12], // spotlight the view's devices, dim the rest
+  spot: [0.0, 0.12], // spotlight the network gear, dim the rest
+  back: [0.08, 0.16], // the back rack row goes first: it would show through the clearing front row
   signs: [0.1, 0.28],
   shell: [0.12, 0.4], // room shell fades
   racks: [0.16, 0.42], // racks and unrelated devices fade
-  back: [0.08, 0.16], // the back rack row goes first: it would show through the clearing front row, offset by perspective
-  ghost: [0.3, 0.55], // a faint outline of the racks while the devices leave, so you can see where they came from
-  ghostOut: [0.6, 0.85], // and gone before the network has formed (labels come at 0.88)
-  fly: { ph: [0.3, 0.6], tr: [0.4, 0.68], ip: [0.48, 0.78] }, // staggered photonic, transport, IP
-  slab: { ph: [0.56, 0.76], tr: [0.62, 0.82], ip: [0.68, 0.88] },
-  handover: [0.78, 0.9], // device-to-device fibres fade, CAL links and wavelengths fade in
-  labels: [0.88, 0.98],
+  ghost: [0.3, 0.5], ghostOut: [0.7, 0.88], // a faint outline of the racks while the gear leaves them
+  fly: { ph: [0.3, 0.46], tr: [0.44, 0.58], ip: [0.6, 0.76] }, // all line systems together, then transport, then RSP
+  ipStagger: 0.006, // per rack, left to right: the RSP overlay rises as a wave
+  slab: { ph: [0.42, 0.54], tr: [0.54, 0.64], ip: [0.74, 0.84] },
+  links: { ph: [0.48, 0.56], tr: [0.6, 0.68], ip: [0.8, 0.9] }, // spans and waves, transport, the RSP attaching
+  labels: { ph: [0.5, 0.6], tr: [0.62, 0.7], ip: [0.84, 0.94] },
+  handover: [0.44, 0.52], // the rack fibres fade as the CAL spans take over
 };
-// The ring swap: the old ring flies home first, then the other ring comes up.
-const presence = (view, s) => (view === 'ws6500' ? 1 - smooth(0, 0.5, s) : smooth(0.5, 1, s));
+const ALL = Object.fromEntries(SYSTEM_KEYS.map((k) => [k, 1]));
 
 // ---- Materials that fade ---------------------------------------------------------------------
 function fader(mat, base = mat.opacity ?? 1) {
@@ -222,6 +222,30 @@ function nodeMesh(type) {
     h.position.y = v.position.y = PH_H + 0.005;
     g.add(base, top, h, v);
     height = PH_H;
+  } else if (type === 'switch') { // RSP switch: a flat slab with a white stripe
+    const body = box(1.1, 0.24, 0.78, M({ color: 0xb30012, roughness: 0.45, metalness: 0.1, emissive: 0x300000 }));
+    body.position.y = 0.12 + 0.03;
+    const base = box(1.14, 0.06, 0.82, M({ color: 0xd8dae0, roughness: 0.6 })); base.position.y = 0.03;
+    const gm = glyph(), st = box(0.8, 0.01, 0.06, gm); st.position.y = 0.275;
+    g.add(base, body, st);
+    height = 0.28;
+  } else if (type === 'filter') { // ELS terminal (filter): a low block with three white bars
+    const hh = PH_H * 0.62;
+    const base = box(1.2, 0.18, 0.9, M({ color: 0x15161a, roughness: 0.6 })); base.position.y = 0.09;
+    const top = box(1.2, hh - 0.18, 0.9, M({ color: RED, roughness: 0.4, emissive: 0x400000 })); top.position.y = 0.18 + (hh - 0.18) / 2;
+    const gm = glyph();
+    for (const dz of [-0.22, 0, 0.22]) { const b = box(0.8, 0.01, 0.06, gm); b.position.set(0, hh + 0.005, dz); g.add(b); }
+    g.add(base, top);
+    height = hh;
+  } else if (type === 'oadm') { // ELS OADM: a low drum with a white cross
+    const hh = PH_H * 0.62;
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.16, 32), M({ color: 0x15161a, roughness: 0.6 })); base.position.y = 0.08;
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.58, hh - 0.16, 32), M({ color: RED, roughness: 0.4, emissive: 0x400000 }));
+    top.position.y = 0.16 + (hh - 0.16) / 2;
+    const gm = glyph(), h = box(0.7, 0.01, 0.05, gm), v = box(0.05, 0.01, 0.7, gm);
+    h.position.y = v.position.y = hh + 0.005;
+    g.add(base, top, h, v);
+    height = hh;
   } else { // amp: a triangular prism
     const tri = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.72, PH_H - 0.14, 3), M({ color: RED, roughness: 0.4, emissive: 0x400000 }));
     tri.position.y = 0.14 + (PH_H - 0.14) / 2;
@@ -231,10 +255,10 @@ function nodeMesh(type) {
     height = PH_H;
   }
   g.scale.setScalar(S);
-  const width = (type === 'amp' ? 1.44 : type === 'roadm' ? 1.3 : 1.28) * S;
+  const width = ({ amp: 1.44, roadm: 1.3, switch: 1.14, filter: 1.2, oadm: 1.2 }[type] ?? 1.28) * S;
   return { group: g, mats, height: height * S, width };
 }
-const nodeEdge = (n) => (n.type === 'amp' ? 0.8 : 0.68) * S; // a ribbon starts at a node's edge
+const nodeEdge = (n) => ({ amp: 0.8, filter: 0.62, oadm: 0.6 }[n.type] ?? 0.68) * S; // a ribbon starts at a node's edge
 
 // =============================================================================================
 export function createMorph(model, { log = console } = {}) {
@@ -387,80 +411,77 @@ export function createMorph(model, { log = console } = {}) {
     signs.add(at(plate, xOfOrder(rk.order), RACK_PLINTH + (ns.ru - 1 + 0.5) * U_M, (rk.row === 'back' ? BACK_Z : FRONT_Z) + DEV_FRONT));
   }
 
-  // ---- Network nodes and the devices that fly to them ----
+
+  // ---- Network nodes and the devices that move to them ----
+  // A node stands over (or under) its device's rack: x is the device's, z its own depth in the network.
   const net = mk('Network');
-  const nodeById = Object.fromEntries(NODES.map((n) => [n.id, n]));
-  const nodes = {}; // id -> { n, mesh, mats, height, base, primary flyer, label }
-  for (const n of NODES) {
-    if (!model.joins.some((j) => j.node.id === n.id)) continue;
-    const nm = nodeMesh(n.type);
-    net.add(nm.group);
-    const label = textSprite(n.name, 0.075, { accent: n.layer === 'tr' ? '#9aa0ad' : '#dc0000' });
-    label.material.depthTest = false; label.renderOrder = 10; // never hidden behind another node
-    // Photonic labels hang in front of their node, clear of the transport layer above. An amp sits
-    // on a span at the ring's side, under the drops of the Waveserver in front of it, so its label
-    // is set to the outside (left of a left-hand amp, right of a right-hand one).
-    if (n.layer === 'ph') label.center.set(n.type === 'amp' ? (n.pos[0] < 0 ? 1 : 0) : 0.5, 1);
-    net.add(label);
-    nodes[n.id] = { n, ...nm, base: nodeBase(n), cur: nodeBase(n), label, c: 0 };
-  }
-  // one flyer per joined device; a device in both views (routers, Waveservers) has one node in both
-  const flyers = new Map();
-  const layerIdx = {};
+  const sysOf = (id) => model.sysOf[id] || [];
+  const nodes = {}; // id -> { n, group, mats, height, width, base, cur, label, primary, c, sys }
+  const centroidX = {}; // per line system, for setting an amp's label to the outside
   for (const j of model.joins) {
-    const names = [j.primary, ...j.helpers];
-    names.forEach((name, i) => {
-      let f = flyers.get(name);
-      if (!f) {
-        const dv = devOf.get(name);
-        const mat = fader(new THREE.MeshStandardMaterial({ color: 0xccd2d9, emissive: 0xccd2d9, roughness: 0.55, metalness: 0.12 }));
-        mat.userData.emissive = dv.state === 'deployed' ? 0.16 : 0.06;
-        const mesh = new THREE.Mesh(UNIT_BOX, mat);
-        const edgeMat = fader(new THREE.LineBasicMaterial({ color: 0xf6a623 }));
-        const edges = new THREE.LineSegments(UNIT_EDGES, edgeMat);
-        net.add(mesh, edges);
-        f = { name, from: devPos.get(name), size: new THREE.Vector3(DEV_W, dv.h * U_M - 0.18 * IN, DEV_D), mesh, mat, edges, edgeMat,
-          views: {}, pos: devPos.get(name).clone(), k: 0 };
-        flyers.set(name, f);
-      }
-      const key = `${j.view}:${j.node.layer}`;
-      if (i === 0) layerIdx[key] = (layerIdx[key] ?? -1) + 1;
-      f.views[j.view] = { node: j.node.id, primary: i === 0, delay: (layerIdx[key] ?? 0) * 0.012 + (i ? 0.008 : 0) };
-      if (i === 0) nodes[j.node.id].primary = f;
+    const n = j.node, nm = nodeMesh(n.type), from = devPos.get(j.primary);
+    const base = new THREE.Vector3(from.x + (n.dx || 0) * R * S, DIORAMA.y + layerY(n.layer) * S, DIORAMA.z + n.z * S);
+    net.add(nm.group);
+    const hM = n.layer === 'ip' ? (n.type === 'switch' ? 0.05 : 0.07) : n.layer === 'tr' ? 0.062 : 0.058;
+    const label = textSprite(n.name, hM, { accent: n.layer === 'tr' ? '#9aa0ad' : '#dc0000' });
+    label.material.depthTest = false; label.renderOrder = 10; // never hidden behind another node
+    net.add(label);
+    nodes[n.id] = { n, ...nm, base, cur: base.clone(), label, c: 0, sys: sysOf(n.id) };
+    if (n.layer === 'ph') (centroidX[n.sys] ||= []).push(base.x);
+  }
+  for (const k of Object.keys(centroidX)) centroidX[k] = centroidX[k].reduce((a, b) => a + b, 0) / centroidX[k].length;
+  for (const nd of Object.values(nodes)) {
+    const n = nd.n;
+    if (n.layer !== 'ph') continue;
+    // photonic labels hang in front of their node, clear of the transport layer above; an amp's sits outside the ring
+    nd.side = n.type === 'amp' ? Math.sign(nd.base.x - centroidX[n.sys]) || 1 : 0;
+    nd.label.center.set(nd.side ? (nd.side < 0 ? 1 : 0) : 0.5, 1);
+  }
+  // one flyer per device: the node's own device, and its helper shelves, which merge into it
+  const flyers = new Map();
+  for (const j of model.joins) {
+    const node = nodes[j.node.id];
+    const delay = j.node.layer === 'ip' ? (lab.racks[j.rack].order - 1) * PHASES.ipStagger : 0;
+    [j.primary, ...j.helpers].forEach((name, i) => {
+      const dv = devOf.get(name);
+      const mat = fader(new THREE.MeshStandardMaterial({ color: 0xccd2d9, emissive: 0xccd2d9, roughness: 0.55, metalness: 0.12 }));
+      mat.userData.emissive = dv.state === 'deployed' ? 0.16 : 0.06;
+      const mesh = new THREE.Mesh(UNIT_BOX, mat);
+      const edgeMat = fader(new THREE.LineBasicMaterial({ color: 0xf6a623 }));
+      const edges = new THREE.LineSegments(UNIT_EDGES, edgeMat);
+      net.add(mesh, edges);
+      const f = { name, node, primary: i === 0, delay: delay + (i ? 0.006 : 0), from: devPos.get(name),
+        size: new THREE.Vector3(DEV_W, dv.h * U_M - 0.18 * IN, DEV_D), mesh, mat, edges, edgeMat,
+        pos: devPos.get(name).clone(), fibre: new THREE.Vector3(), k: 0 };
+      flyers.set(name, f);
+      if (i === 0) node.primary = f;
     });
   }
 
-  // ---- Layer slabs and captions ----
+  // ---- Layer slabs (sized to their nodes) and the big captions ----
   const slabs = {};
   for (const k of LAYER_ORDER) {
-    const [w, d] = LAYERS[k].size, [cx, cz] = LAYERS[k].center;
+    const ns = Object.values(nodes).filter((nd) => nd.n.layer === k);
+    const zs = ns.map((nd) => nd.base.z);
+    if (k === 'ph') for (const [, , lane] of PH_JOINS) zs.push(DIORAMA.z + lane * S); // the RLS-300 lanes in front
+    const mg = LAYERS[k].margin * S;
+    const x0 = Math.min(...ns.map((nd) => nd.base.x)) - mg, x1 = Math.max(...ns.map((nd) => nd.base.x)) + mg;
+    const z0 = Math.min(...zs) - mg, z1 = Math.max(...zs) + mg, w = x1 - x0, d = z1 - z0;
     const g = new THREE.Group();
-    g.position.set(DIORAMA.x + cx * S, DIORAMA.y + layerY(k) * S - 0.03, DIORAMA.z + cz * S);
+    g.position.set((x0 + x1) / 2, DIORAMA.y + layerY(k) * S - 0.03, (z0 + z1) / 2);
     const mat = fader(new THREE.MeshStandardMaterial({ color: 0xe8edf3, roughness: 0.85, transparent: true, opacity: 0.16 }), 0.16);
     mat.userData.noDepth = true;
-    const slab = new THREE.Mesh(new THREE.BoxGeometry(w * S, 0.22 * S, d * S), mat); slab.renderOrder = -1;
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(w, 0.22 * S, d), mat); slab.renderOrder = -1;
     const eMat = fader(new THREE.LineBasicMaterial({ color: 0x9fb3c8, transparent: true, opacity: 0.8 }), 0.8);
-    const edge = new THREE.LineSegments(new THREE.EdgesGeometry(slab.geometry), eMat);
-    g.add(slab, edge);
+    g.add(slab, new THREE.LineSegments(new THREE.EdgesGeometry(slab.geometry), eMat));
     net.add(g);
-    // The layer caption: the biggest text on the diorama (readable from the back row), standing just
-    // where no node, link or label crosses it: outside the front-left corner for the photonic and
-    // transport slabs; above the back edge for the IP slab (its client drops sweep off to the left).
-    const above = LAYERS[k].caption === 'above';
-    const captions = Object.fromEntries(Object.entries(VIEWS).map(([v, V]) => {
-      const text = V.layers[k], n = text.split('\n').length;
-      const sp = textSprite(text, CAPTION_LINE * n, { bg: 'rgba(10,14,20,0.7)', fg: '#eaf1f8', weight: 700 });
-      if (above) {
-        sp.center.set(0.5, 0);
-        sp.position.set(g.position.x, g.position.y + 0.3, g.position.z - (d / 2) * S);
-      } else {
-        sp.center.set(1, 0);
-        sp.position.set(g.position.x - (w / 2) * S - 0.08, g.position.y + 0.02, g.position.z + (d / 2) * S);
-      }
-      net.add(sp);
-      return [v, sp];
-    }));
-    slabs[k] = { g, mats: [mat, eMat], captions };
+    // the layer caption: the biggest text on the diorama, where no node, link or label crosses it — outside
+    // the slab's front-left corner, or above its back edge for the IP slab (its drops sweep down in front)
+    const text = LAYERS[k].caption, cap = textSprite(text, CAPTION_LINE * text.split('\n').length, { bg: 'rgba(10,14,20,0.7)', fg: '#eaf1f8', weight: 700 });
+    if (LAYERS[k].place === 'above') { cap.center.set(0.5, 0); cap.position.set(g.position.x, g.position.y + 0.3, z0); }
+    else { cap.center.set(1, 0); cap.position.set(x0 - 0.08, g.position.y + 0.02, z1); }
+    net.add(cap);
+    slabs[k] = { g, mats: [mat, eMat], cap };
   }
 
   // ---- Links ----
@@ -468,18 +489,20 @@ export function createMorph(model, { log = console } = {}) {
   const dashTex = dashTexture(), specTex = spectrumTexture();
   const basic = (color, opacity = 1) => fader(new THREE.MeshBasicMaterial({ color, transparent: true, opacity }), opacity);
   const dashed = (color) => { const mm = basic(color); mm.map = dashTex.clone(); mm.map.needsUpdate = true; mm.alphaTest = 0.5; return mm; };
-  const cal = []; // { view|null, update() , show(a) }
+  const net_ = []; // { layer, sys[], show(a), update(time), label? }
   const top = (id) => _w.copy(nodes[id].cur).setY(nodes[id].cur.y + nodes[id].height);
-  // photonic ring spans: spectrum ribbons from node edge to node edge
-  for (const sys of PH_SYSTEMS) {
-    const ids = sys.nodes.filter((id) => nodes[id]);
-    for (let i = 0; i < (sys.ring ? ids.length : ids.length - 1); i++) {
+  const mid = (id, out) => out.copy(nodes[id].cur).setY(nodes[id].cur.y + nodes[id].height * 0.5);
+  const both = (a, b) => { const s1 = sysOf(a), s2 = sysOf(b), i = s1.filter((x) => s2.includes(x)); return i.length ? i : [...new Set([...s1, ...s2])]; };
+  // photonic spans: spectrum ribbons from node edge to node edge
+  for (const sysDef of PH_SYSTEMS) {
+    const ids = sysDef.nodes.filter((id) => nodes[id]);
+    for (let i = 0; i < (sysDef.ring ? ids.length : ids.length - 1); i++) {
       const a = ids[i], b = ids[(i + 1) % ids.length];
       const mat = fader(new THREE.MeshBasicMaterial({ map: specTex, transparent: true, opacity: 0.42, side: THREE.DoubleSide }), 0.42);
       mat.userData.noDepth = true;
       const rb = new Ribbon(links, mat, RIBBON.h * S);
       const pa = new THREE.Vector3(), pb = new THREE.Vector3();
-      cal.push({ view: sys.views[0], show: (al) => rb.show(al), update: () => {
+      net_.push({ layer: 'ph', sys: [sysDef.sys], show: (al) => rb.show(al), update: () => {
         pa.copy(nodes[a].cur); pb.copy(nodes[b].cur);
         _v.subVectors(pb, pa).setY(0).normalize();
         pa.addScaledVector(_v, nodeEdge(nodes[a].n)); pb.addScaledVector(_v, -nodeEdge(nodes[b].n));
@@ -488,87 +511,95 @@ export function createMorph(model, { log = console } = {}) {
       } });
     }
   }
+  // the RLS-300 joining the rings: fibres on lanes in front of the rings
+  for (const [a, b, lane, step] of PH_JOINS) {
+    if (!nodes[a] || !nodes[b]) continue;
+    const mat = basic(0x7fd0e6), segs = [0, 1, 2, 3].map(() => new Seg(links, mat, 0.007));
+    const p = [0, 1, 2, 3, 4].map(() => new THREE.Vector3());
+    net_.push({ layer: 'ph', sys: [nodes[a].n.sys, nodes[b].n.sys], show: (al) => segs.forEach((sg) => sg.show(al)), update: () => {
+      const y = nodes[a].cur.y + (RIBBON.y0 + 0.5 * RIBBON.h) * S, lz = DIORAMA.z + lane * S;
+      p[0].copy(nodes[a].cur).setY(y);
+      p[1].copy(p[0]).x += step * R * S;
+      p[2].set(p[1].x, y, lz); p[3].set(nodes[b].cur.x, y, lz);
+      p[4].copy(nodes[b].cur).setY(y);
+      for (let i = 0; i < 4; i++) segs[i].set(p[i], p[i + 1]);
+    } });
+  }
   // wavelengths: a coloured line on the ribbons at the band's height, with light pulses running along it
   for (const W_ of Object.values(WAVES)) {
     if (!W_.path.every((id) => nodes[id])) continue;
     const segs = [], mat = basic(W_.color);
     for (let i = 1; i < W_.path.length; i++) segs.push(new Seg(links, mat, 0.008));
     const pulseMat = basic(0xffffff);
-    const pulses = [0, 1, 2].map(() => { const p = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 8), pulseMat); links.add(p); return p; });
-    const lbl = textSprite(W_.rate, 0.06, { bg: 'rgba(10,14,20,0.75)', fg: '#' + W_.color.toString(16).padStart(6, '0') });
+    const pulses = [0, 1, 2].map(() => { const pm = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 8), pulseMat); links.add(pm); return pm; });
+    const lbl = textSprite(W_.rate, 0.05, { bg: 'rgba(10,14,20,0.75)', fg: '#' + W_.color.toString(16).padStart(6, '0') });
     links.add(lbl);
     const pts = W_.path.map(() => new THREE.Vector3());
     const y = (RIBBON.y0 + W_.band * RIBBON.h) * S;
     let total = 0;
     const along = (u, out) => { // a point at fraction u along the path
-      let d = u * total;
+      let dd = u * total;
       for (let i = 1; i < pts.length; i++) {
         const l = pts[i].distanceTo(pts[i - 1]);
-        if (d <= l || i === pts.length - 1) return out.lerpVectors(pts[i - 1], pts[i], l ? Math.min(1, d / l) : 0);
-        d -= l;
+        if (dd <= l || i === pts.length - 1) return out.lerpVectors(pts[i - 1], pts[i], l ? Math.min(1, dd / l) : 0);
+        dd -= l;
       }
       return out;
     };
-    cal.push({ view: W_.views[0], wave: true,
-      show: (al) => { segs.forEach((sg) => sg.show(al)); pulses.forEach((p) => (p.visible = al > 0.5)); setAlpha(pulseMat, al); },
+    net_.push({ layer: 'ph', sys: [nodes[W_.path[0]].n.sys],
+      show: (al) => { segs.forEach((sg) => sg.show(al)); pulses.forEach((pm) => (pm.visible = al > 0.5)); setAlpha(pulseMat, al); },
       showLabel: (al) => { lbl.visible = al > 0.003; setAlpha(lbl.material, al); },
       update: (time) => {
         W_.path.forEach((id, i) => pts[i].copy(nodes[id].cur).setY(nodes[id].cur.y + y));
         total = 0;
         for (let i = 1; i < pts.length; i++) { segs[i - 1].set(pts[i - 1], pts[i]); total += pts[i].distanceTo(pts[i - 1]); }
-        pulses.forEach((p, i) => along(((time * 0.09) / Math.max(total, 0.1) + i / 3) % 1, p.position));
-        along(W_.at ?? (pts.length > 2 ? 0.27 : 0.5), lbl.position).y += (RIBBON.h - W_.band * RIBBON.h) * S + 0.02;
+        pulses.forEach((pm, i) => along(((time * 0.09) / Math.max(total, 0.1) + i / 3) % 1, pm.position));
+        along(W_.at ?? 0.5, lbl.position).y += (RIBBON.h - W_.band * RIBBON.h) * S + 0.02;
       } });
   }
-  // IP adjacencies (dashed, in the colour of the wavelength that carries them in each view)
-  for (const [a, b, via] of IP_LINKS) {
-    for (const [view, wl] of Object.entries(via)) {
-      const sg = new Seg(links, dashed(WAVES[wl].color), 0.006, 0.05);
-      const pa = new THREE.Vector3(), pb = new THREE.Vector3();
-      cal.push({ view, show: (al) => sg.show(al), update: () => {
-        pa.copy(nodes[a].cur).setY(nodes[a].cur.y + nodes[a].height * 0.5);
-        pb.copy(nodes[b].cur).setY(nodes[b].cur.y + nodes[b].height * 0.5);
-        sg.set(pa, pb);
-      } });
-    }
-  }
-  // cross-layer drops: grey clients, or a coherent optic in its wavelength's colour
-  for (const [a, b, views, optic, off = [0, 0]] of DROPS) {
+  // transport adjacencies (dashed)
+  for (const [a, b] of TR_LINKS) {
     if (!nodes[a] || !nodes[b]) continue;
-    const sg = new Seg(links, basic(optic === 'grey' ? GREY : WAVES[optic].color), optic === 'grey' ? 0.004 : 0.005);
-    const pa = new THREE.Vector3(), pb = new THREE.Vector3();
-    cal.push({ view: views.length > 1 ? null : views[0], show: (al) => sg.show(al), update: () => {
-      pa.copy(nodes[a].cur).add(_v.set(off[0] * S, 0, off[1] * S));
-      pb.copy(top(b)).add(_v.set(off[0] * S, 0, off[1] * S));
-      sg.set(pa, pb);
-    } });
+    const sg = new Seg(links, dashed(0xc8d6e5), 0.006, 0.05), pa = new THREE.Vector3(), pb = new THREE.Vector3();
+    net_.push({ layer: 'tr', sys: both(a, b), show: (al) => sg.show(al), update: () => sg.set(mid(a, pa), mid(b, pb)) });
   }
-  // transport adjacencies (dashed, set apart sideways)
-  for (const [a, b, views, wl, off] of TR_LINKS) {
-    const sg = new Seg(links, dashed(WAVES[wl].color), 0.006, 0.05);
-    const pa = new THREE.Vector3(), pb = new THREE.Vector3();
-    cal.push({ view: views[0], show: (al) => sg.show(al), update: () => {
-      _v.subVectors(nodes[b].cur, nodes[a].cur).setY(0).normalize();
-      _w.set(-_v.z, 0, _v.x).multiplyScalar(off * S);
-      pa.copy(nodes[a].cur).add(_w).setY(nodes[a].cur.y + nodes[a].height * 0.5);
-      pb.copy(nodes[b].cur).add(_w).setY(nodes[b].cur.y + nodes[b].height * 0.5);
-      sg.set(pa, pb);
-    } });
+  // cross-layer drops, shown with their upper layer: a 1310 client into a Waveserver (thin grey, tagged
+  // "1310"), a direct pluggable into a line system (thicker, in the line system's colour), or a transponder's
+  // coherent line side (its wavelength's colour)
+  for (const d of model.drops) {
+    const lowSys = sysOf(d.b)[0];
+    const color = d.optic === '1310' ? GREY : d.optic === 'direct' ? DIRECT[lowSys] : (WAVES[d.optic]?.color ?? GREY);
+    const sg = new Seg(links, basic(color), d.optic === '1310' ? 0.0035 : 0.0055);
+    const pa = new THREE.Vector3(), tag = d.optic === '1310' ? textSprite('1310', 0.042, { bg: 'rgba(10,14,20,0.75)', fg: '#c9d1da', weight: 700 }) : null;
+    if (tag) { tag.center.set(0, 0.5); links.add(tag); }
+    net_.push({ layer: nodes[d.a].n.layer, sys: sysOf(d.b).length ? sysOf(d.b) : sysOf(d.a),
+      show: (al) => sg.show(al),
+      showLabel: tag && ((al) => { tag.visible = al > 0.003; setAlpha(tag.material, al); }),
+      update: () => {
+        sg.set(pa.copy(nodes[d.a].cur), top(d.b));
+        if (tag) tag.position.lerpVectors(pa, _w, 0.45).x += 0.012; // beside the drop, a little above its middle
+      } });
+  }
+  // RSP adjacencies (dashed, light)
+  for (const [a, b] of IP_LINKS) {
+    if (!nodes[a] || !nodes[b]) continue;
+    const sg = new Seg(links, dashed(0xd7e3f0), 0.0045, 0.04), pa = new THREE.Vector3(), pb = new THREE.Vector3();
+    net_.push({ layer: 'ip', sys: both(a, b), show: (al) => sg.show(al), update: () => sg.set(mid(a, pa), mid(b, pb)) });
   }
 
-  // ---- EBC fibres that follow the devices until the handover: the laser ring, the Waveserver line ----
+  // ---- EBC fibres that follow the devices until the handover: the laser rings, the patch fibres ----
   const ebc = [];
-  const ringOf = { ws6500: lab.rings['6500'], wsrls: lab.rings.RLS };
-  for (const [view, ring] of Object.entries(ringOf)) {
-    const fl = ring.map((n) => flyers.get(n)).filter(Boolean);
+  for (const [label_, ring] of Object.entries(lab.rings || {})) {
+    const fl = (ring || []).map((n) => flyers.get(n)).filter(Boolean);
+    if (fl.length < 3) continue;
     const mat = basic(0xffe000);
     const segs = fl.map(() => new Seg(links, mat, 0.006));
-    ebc.push({ view, ring: true, show: (al) => segs.forEach((sg) => sg.show(al)),
+    ebc.push({ ring: true, show: (al) => segs.forEach((sg) => sg.show(al)),
       update: () => fl.forEach((f, i) => segs[i].set(f.fibre, fl[(i + 1) % fl.length].fibre)) });
   }
   // The lab's patch fibres, as index.html draws them in the room: a cable bowed 2.5 in toward the
   // glass, dashed where the inventory says so, with its label (e.g. "(800G)") above the middle.
-  // Between two flying devices the cable follows them; the rest stay in the racks and fade with them.
+  // Between two moving devices the cable follows them; the rest stay in the racks and fade with them.
   const fibreLabel = (text) => {
     const cv = document.createElement('canvas'); cv.width = 512; cv.height = Math.round(512 * 0.10 / 0.34);
     const ctx = cv.getContext('2d');
@@ -580,23 +611,23 @@ export function createMorph(model, { log = console } = {}) {
     const fa = flyers.get(fb.a), fbb = flyers.get(fb.b), pa = devPos.get(fb.a), pb = devPos.get(fb.b);
     if (!pa || !pb) continue;
     const color = new THREE.Color(fb.color).getHex();
-    const mid = pa.clone().add(pb).multiplyScalar(0.5); mid.z += 2.5 * IN;
-    if (fb.label) racks.add(at(fibreLabel(fb.label), mid.x, mid.y + 0.12, mid.z + 0.5 * IN));
+    const m_ = pa.clone().add(pb).multiplyScalar(0.5); m_.z += 2.5 * IN;
+    if (fb.label) racks.add(at(fibreLabel(fb.label), m_.x, m_.y + 0.12, m_.z + 0.5 * IN));
     if (fa && fbb) {
-      const sg = new Seg(links, basic(color), 0.006);
-      ebc.push({ view: null, show: (al) => sg.show(al), update: () => sg.set(fa.fibre, fbb.fibre) });
+      const sg = new Seg(links, fb.dashed ? dashed(color) : basic(color), 0.006, fb.dashed ? 0.1 : 0);
+      ebc.push({ show: (al) => sg.show(al), update: () => sg.set(fa.fibre, fbb.fibre) });
       continue;
     }
     const mat = ch.racks.add(fb.dashed ? dashed(color) : basic(color));
     const a = pa.clone().setZ(pa.z + 2.5 * IN), b = pb.clone().setZ(pb.z + 2.5 * IN);
-    for (const [p, q] of [[a, mid], [mid, b]]) new Seg(racks, mat, 0.006, fb.dashed ? 0.1 : 0).set(p, q);
+    for (const [p, q] of [[a, m_], [m_, b]]) new Seg(racks, mat, 0.006, fb.dashed ? 0.1 : 0).set(p, q);
   }
 
   // ---- Per-frame evaluation ----
   const ph = PHASES;
   const vec = new THREE.Vector3();
-  function update({ t = 0, s = 0, time = 0 } = {}) {
-    const pres = { ws6500: presence('ws6500', s), wsrls: presence('wsrls', s) };
+  const hl = (sys, focus) => (sys.length ? 0.1 + 0.9 * Math.max(...sys.map((k) => focus[k] ?? 1)) : 1);
+  function update({ t = 0, focus = ALL, time = 0 } = {}) {
     const spot = smooth(...ph.spot, t);
     const shellA = 1 - smooth(...ph.shell, t), racksA = 1 - smooth(...ph.racks, t);
     const ghostA = smooth(...ph.ghost, t) * (1 - smooth(...ph.ghostOut, t));
@@ -611,83 +642,59 @@ export function createMorph(model, { log = console } = {}) {
     m.lens.emissiveIntensity = 1.3 * (1 - 0.9 * spot);
     for (const mm of [rk.devD, rk.devP, bk.devD, bk.devP]) mm.emissiveIntensity = mm.userData.emissive * (1 - 0.85 * spot);
 
-    // flyers
+    // the devices move straight to their nodes: photonic together, then transport, then the RSP overlay
     for (const f of flyers.values()) {
-      let k = 0, rel = 0, pick = null;
-      for (const [view, r] of Object.entries(f.views)) {
-        const p = Object.keys(f.views).length === 2 ? 1 : pres[view]; // in both views: always present
-        const [a, b] = ph.fly[nodeById[r.node].layer];
-        const kv = smooth(a + r.delay, b + r.delay, t) * p;
-        rel = Math.max(rel, p);
-        if (kv >= k) { k = kv; pick = r; }
-      }
-      pick ||= Object.values(f.views)[0];
-      const node = nodes[pick.node], e = easeInOut(k);
+      const node = f.node, [a, b] = ph.fly[node.n.layer];
+      const k = smooth(a + f.delay, b + f.delay, t), e = easeInOut(k);
       const target = vec.copy(node.base).setY(node.base.y + node.height / 2);
       f.pos.lerpVectors(f.from, target, e);
-      // an arc up and over, only for a flight that goes somewhere sideways; a drop stays a drop
-      const arc = clamp01((Math.hypot(target.x - f.from.x, target.z - f.from.z) - 0.5) / 0.8);
-      f.pos.y += Math.sin(Math.PI * e) * 0.35 * arc;
-      f.pos.z += Math.sin(Math.PI * e) * 0.15 * arc;
       f.k = k;
       // body: a rack panel that shrinks toward the node's size, then crossfades into the node mesh
       const sx = lerp(f.size.x, node.width * 0.9, e), sy = lerp(f.size.y, node.height * 0.9, e), sz = lerp(f.size.z, node.width * 0.9, e);
-      const merge = pick.primary ? 1 : 1 - smooth(0.7, 1, k); // helper shelves merge into the node
+      const merge = f.primary ? 1 : 1 - smooth(0.7, 1, k); // helper shelves merge into the node
       f.mesh.position.copy(f.pos); f.edges.position.copy(f.pos);
       f.mesh.scale.set(sx * merge, sy * merge, sz * merge); f.edges.scale.copy(f.mesh.scale);
-      const inRack = Math.max(racksA, 0.22 * ghostA);
-      const bodyA = lerp(inRack, 1, rel) * (pick.primary ? 1 - smooth(0.8, 1, k) : 1 - smooth(0.6, 0.95, k));
+      const bodyA = (f.primary ? 1 - smooth(0.8, 1, k) : 1 - smooth(0.6, 0.95, k)) * lerp(1, hl(node.sys, focus), e);
       f.mesh.visible = f.edges.visible = bodyA > 0.003 && merge > 0.01;
       setAlpha(f.mat, bodyA); setAlpha(f.edgeMat, bodyA);
-      const glow = spot * rel;
-      f.mat.emissiveIntensity = f.mat.userData.emissive * (1 - 0.85 * spot) + 0.75 * glow;
-      f.edgeMat.color.setHex(0xf6a623).multiplyScalar(1 + 0.6 * glow);
-      // where a fibre attaches: proud of the rack face while in the rack
-      f.fibre ||= new THREE.Vector3();
-      f.fibre.copy(f.pos).z += 0.09 * (1 - e);
-      if (pick.primary) node.c = Math.max(node.c, smooth(0.8, 1, k));
+      f.mat.emissiveIntensity = f.mat.userData.emissive * (1 - 0.85 * spot) + 0.75 * spot;
+      f.edgeMat.color.setHex(0xf6a623).multiplyScalar(1 + 0.6 * spot);
+      f.fibre.copy(f.pos).z += 0.09 * (1 - e); // where a fibre attaches: proud of the rack face while in the rack
+      if (f.primary) node.c = smooth(0.8, 1, k);
     }
-    // node meshes ride on their primary flyer and fade in as it lands
+    // node meshes ride on their primary device and fade in as it lands
     for (const nd of Object.values(nodes)) {
-      const f = nd.primary;
-      const c = nd.c; nd.c = 0;
+      const f = nd.primary, c = nd.c, h = hl(nd.sys, focus);
       nd.cur.copy(f.pos).setY(f.pos.y - nd.height / 2);
       nd.group.position.copy(nd.cur);
       nd.group.scale.setScalar(S * lerp(0.7, 1, c));
       nd.group.visible = c > 0.003;
-      nd.mats.forEach((mm) => setAlpha(mm, c));
-      const la = smooth(...ph.labels, t) * c;
+      nd.mats.forEach((mm) => setAlpha(mm, c * h));
+      const la = smooth(...ph.labels[nd.n.layer], t) * c * h;
       nd.label.visible = la > 0.003; setAlpha(nd.label.material, la);
-      if (nd.n.layer === 'ph') {
-        const side = nd.n.type === 'amp' ? Math.sign(nd.n.pos[0]) * nd.width * 0.55 : 0;
-        nd.label.position.copy(nd.cur).add(_v.set(side, 0.01, nd.width * (side ? 0.5 : 0.75)));
-      } else nd.label.position.copy(nd.cur).setY(nd.cur.y + nd.height + 0.02);
+      if (nd.n.layer === 'ph') nd.label.position.copy(nd.cur).add(_v.set(nd.side * nd.width * 0.55, 0.01, nd.width * (nd.side ? 0.5 : 0.75)));
+      else nd.label.position.copy(nd.cur).setY(nd.cur.y + nd.height + 0.02);
     }
     // slabs grow, captions appear
-    const lab_ = smooth(...ph.labels, t);
     for (const [k, sl] of Object.entries(slabs)) {
       const g = smooth(...ph.slab[k], t);
       sl.g.scale.set(Math.max(g, 1e-3), 1, Math.max(g, 1e-3));
       sl.g.visible = g > 0.003;
       sl.mats.forEach((mm) => setAlpha(mm, g));
-      for (const [v, sp] of Object.entries(sl.captions)) {
-        const a = lab_ * g * (k === 'ph' ? pres[v] : v === 'ws6500' ? 1 - s : s);
-        sp.visible = a > 0.003; setAlpha(sp.material, a);
-      }
+      const a = smooth(...ph.labels[k], t) * g;
+      sl.cap.visible = a > 0.003; setAlpha(sl.cap.material, a);
     }
-    // links: device fibres hand over to the CAL links and wavelengths
-    // the laser ring comes up with the spotlight; the patch fibres are there from the start, as in the room
+    // the rack fibres hand over to the network's spans, links and drops, layer by layer
     const ebcA = 1 - smooth(...ph.handover, t), ringA = smooth(0.02, 0.1, t) * ebcA;
-    for (const l of ebc) { const a = (l.ring ? ringA : ebcA) * (l.view ? pres[l.view] : 1); l.show(a); if (a > 0.003) l.update(time); }
-    const calA = smooth(ph.handover[0] + 0.04, ph.handover[1] + 0.04, t);
-    for (const l of cal) {
-      const a = (l.label ? lab_ : calA) * (l.view ? pres[l.view] : 1);
+    for (const l of ebc) { const a = l.ring ? ringA : ebcA; l.show(a); if (a > 0.003) l.update(time); }
+    for (const l of net_) {
+      const a = smooth(...ph.links[l.layer], t) * hl(l.sys, focus);
       l.show(a);
-      l.showLabel?.(lab_ * a);
+      l.showLabel?.(smooth(...ph.labels[l.layer], t) * a);
       if (a > 0.003) l.update(time);
     }
   }
-  update({ t: 0, s: 0 });
+  update({ t: 0 });
 
   return {
     group: root, lights, update, flyers, nodes,

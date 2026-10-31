@@ -10,7 +10,7 @@ const rows = await b.page.evaluate(() => {
     const nd = MORPH.morph.nodes[j.node.id];
     const f = nd.primary;
     const from = f.from, to = nd.base.clone().setY(nd.base.y + nd.height / 2);
-    out.push({ view: j.view, id: j.node.id, layer: j.node.layer, rack: j.rack, helpers: j.helpers.length,
+    out.push({ id: j.node.id, layer: j.node.layer, rack: j.rack, helpers: j.helpers.length,
       from: [from.x, from.y, from.z].map((v) => +v.toFixed(2)), to: [to.x, to.y, to.z].map((v) => +v.toFixed(2)),
       dx: +(to.x - from.x).toFixed(2), dy: +(to.y - from.y).toFixed(2), dz: +(to.z - from.z).toFixed(2),
       horiz: +Math.hypot(to.x - from.x, to.z - from.z).toFixed(2), vert: +Math.abs(to.y - from.y).toFixed(2) });

@@ -13,7 +13,7 @@
     canvas { display: block; }
     .ui { font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif; color: #eaf1f8; user-select: none; }
 
-    /* View tabs (ws6500 / wsrls) */
+    /* Focus filters on the one network view (All / 6500 / RLS / ELS) */
     #tabs {
       position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 12;
       display: flex; gap: 6px; padding: 6px; border-radius: 18px;
@@ -74,13 +74,15 @@
   <div id="app"></div>
   <div id="loader">Building the room…</div>
 
-  <nav id="tabs" class="ui" aria-label="Network view">
-    <button data-view="wsrls" class="on">wsrls<small>RLS ring · racks A5–A7</small></button>
-    <button data-view="ws6500">ws6500<small>6500 ring · racks A2–A4</small></button>
+  <nav id="tabs" class="ui" aria-label="Focus on a line system">
+    <button data-focus="all" class="on">All<small>one network</small></button>
+    <button data-focus="6500">6500<small>6500 ring · A2–A4</small></button>
+    <button data-focus="rls">RLS<small>RLS ring · A5–A7</small></button>
+    <button data-focus="els">ELS<small>ELS · RLS-300 · A8–A9</small></button>
   </nav>
   <a id="back-link" class="ui" href="./?layout=9">‹ Room (option 9)</a>
 
-  <div id="keys" class="ui">← / → scrub · space play · 1 / 2 view · C camera · P sequence</div>
+  <div id="keys" class="ui">← / → scrub · space play · 1–4 focus · C camera · P sequence</div>
   <div id="bar" class="ui">
     <button id="play" title="Play / pause the morph (space)">▶ Morph</button>
     <label class="scrub">room
@@ -99,19 +101,21 @@
        capture camera and the recorder.
        URL: ?capture  — fixed 1920×1080 canvas, no UI, frames rendered on demand
                         by MORPH.renderAt(seconds) (for offline video capture).
-            ?view=ws6500 | wsrls — the view to open on (default wsrls).
+            ?focus=6500 | rls | els — open with one line system in focus (default: all).
        ====================================================================== -->
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-    import { buildModel, VIEWS } from './morph/model.mjs';
+    import { buildModel, SYSTEMS, SYSTEM_KEYS, TITLE, DIRECT, GREY } from './morph/model.mjs';
     import { createMorph } from './morph/engine.mjs';
 
     const params = new URLSearchParams(location.search);
     const CAPTURE = params.has('capture');
-    const VIEW0 = params.get('view') === 'ws6500' ? 'ws6500' : 'wsrls'; // the default view is the RLS ring
-    const S0 = VIEW0 === 'wsrls' ? 1 : 0; // the engine's s: 0 = ws6500, 1 = wsrls
+    // Focus: one network view; a filter brings one line system (and what rides on it) forward.
+    const FOCUS_KEYS = ['all', ...SYSTEM_KEYS];
+    const FOCUS0 = FOCUS_KEYS.includes(params.get('focus')) ? params.get('focus') : 'all';
+    const focusVec = (key) => Object.fromEntries(SYSTEM_KEYS.map((k) => [k, key === 'all' || key === k ? 1 : 0]));
     if (CAPTURE) document.body.classList.add('capture');
     const REC_W = 1920, REC_H = 1080;
 
@@ -153,8 +157,8 @@
       let last = '';
       return {
         resize() { const s = renderer.getDrawingBufferSize(new THREE.Vector2()); cv.width = s.x; cv.height = s.y; last = ''; },
-        draw(title, caption) {
-          const key = `${title}|${caption}|${cv.width}`;
+        draw(title, caption, legend) {
+          const key = `${title}|${caption}|${legend}|${cv.width}`;
           if (key === last) return; last = key;
           const W = cv.width, H = cv.height, u = H / 1080;
           ctx.clearRect(0, 0, W, H);
@@ -172,6 +176,21 @@
             ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center';
             ctx.fillText(caption, W / 2, y + 12 * u);
             ctx.textAlign = 'left';
+          }
+          if (legend) { // the two kinds of drop from the RSP gear down, top right
+            const hex = (c) => '#' + c.toString(16).padStart(6, '0');
+            const rows = [[[GREY], '1310 client into a Waveserver'],
+              [SYSTEM_KEYS.map((k) => DIRECT[k]), `direct into the ${SYSTEM_KEYS.map((k) => SYSTEMS[k].label).join(' / ')}`]];
+            ctx.font = `600 ${22 * u}px "Segoe UI", Arial, sans-serif`;
+            const tw = Math.max(...rows.map(([, txt]) => ctx.measureText(txt).width));
+            const bw = tw + 150 * u, bh = 30 * u + rows.length * 38 * u, bx = W - bw - 40 * u, by = 34 * u;
+            ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(10,14,20,0.72)';
+            ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 14 * u); ctx.fill();
+            rows.forEach(([cols, txt], i) => {
+              const y = by + 20 * u + i * 38 * u + 13 * u;
+              cols.forEach((c, j) => { ctx.fillStyle = hex(c); ctx.fillRect(bx + 18 * u + j * 30 * u, y - (cols.length > 1 ? 3 : 2) * u, 24 * u, (cols.length > 1 ? 6 : 4) * u); });
+              ctx.fillStyle = '#eaf1f8'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + 120 * u, y); ctx.textBaseline = 'top';
+            });
           }
           tex.needsUpdate = true;
         },
@@ -196,35 +215,42 @@
     const AZ = (SEAT.pos.x - SEAT.at.x) / (SEAT.pos.z - SEAT.at.z);
     const onAzimuth = (at, dz, y, fov) => ({ pos: new THREE.Vector3(at.x + AZ * dz, y, at.z + dz), at, fov });
     const PUSH = onAzimuth(SEAT.at, 3.0 - SEAT.at.z, 1.36, 50);
-    const DIO_AT = new THREE.Vector3(dio.x - 0.15, dio.y + 0.9, dio.z); // a little left: centres the diorama with its big captions
-    const VANTAGE = onAzimuth(DIO_AT, 0.2 - DIO_AT.z, 3.7, 62); // over the near glass, above the diorama
+    const DIO_AT = new THREE.Vector3(dio.x - 0.62, dio.y + 1.4, dio.z + 0.25); // the network's middle (A1–A9) with its big captions
+    const VANTAGE = onAzimuth(DIO_AT, 1.15 - DIO_AT.z, 4.4, 62); // in the conference room, above the table: the whole network
     const orbit = (shot, deg) => {
       const p = shot.pos.clone().sub(shot.at).applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(deg));
       return { pos: p.add(shot.at), at: shot.at, fov: shot.fov };
     };
-    // The scripted sequence: [seconds, t, s, shot]. Values ease between keys. It opens on the
-    // default view (wsrls, s = 1), swaps to the other ring, and goes back into the room.
+    // The scripted sequence: [seconds, t, focus, shot]. Values ease between keys. The room; the line
+    // systems drop together; transport rides them; the RSP network rises and attaches; then a tour of the
+    // three line systems (focus) while the camera orbits, and back into the room.
     const SEQ = [
-      [0, 0, 1, SEAT],
-      [3, 0, 1, SEAT],
-      [7, 0.15, 1, PUSH], // spotlight
-      [25, 1, 1, VANTAGE], // room fades, devices fly, the network grows
-      [31, 1, 1, orbit(VANTAGE, 16)],
-      [39, 1, 0, orbit(VANTAGE, -12)], // tab swap: wsrls → ws6500
-      [45, 1, 0, VANTAGE],
-      [58, 0, 0, SEAT], // and back into the room
-      [62, 0, 0, SEAT],
+      [0, 0, 'all', SEAT],
+      [3, 0, 'all', SEAT],
+      [7, 0.15, 'all', PUSH], // spotlight
+      [27, 1, 'all', VANTAGE], // room fades; photonic drops, transport rides, the RSP overlay attaches
+      [31, 1, 'all', orbit(VANTAGE, 9)],
+      [33, 1, '6500', orbit(VANTAGE, 7)], // the tour: 6500, RLS, ELS
+      [38, 1, '6500', orbit(VANTAGE, 3)],
+      [40, 1, 'rls', orbit(VANTAGE, 1)],
+      [45, 1, 'rls', orbit(VANTAGE, -3)],
+      [47, 1, 'els', orbit(VANTAGE, -5)],
+      [52, 1, 'els', orbit(VANTAGE, -9)],
+      [54, 1, 'all', orbit(VANTAGE, -6)],
+      [57, 1, 'all', VANTAGE],
+      [69, 0, 'all', SEAT], // and back into the room
+      [72, 0, 'all', SEAT],
     ];
     const SEQ_LEN = SEQ[SEQ.length - 1][0];
     const ease = (k) => k * k * (3 - 2 * k);
     function seqAt(sec) {
       sec = Math.min(Math.max(sec, 0), SEQ_LEN);
       let i = 0; while (i < SEQ.length - 2 && sec > SEQ[i + 1][0]) i++;
-      const [a, ta, sa, A] = SEQ[i], [b, tb, sb, B] = SEQ[i + 1];
-      const k = (sec - a) / (b - a), e = ease(k);
+      const [a, ta, fa, A] = SEQ[i], [b, tb, fb, B] = SEQ[i + 1];
+      const k = (sec - a) / (b - a), e = ease(k), va = focusVec(fa), vb = focusVec(fb);
       return {
         t: ta + (tb - ta) * k, // linear: the engine's phases carry their own easing
-        s: sa + (sb - sa) * k,
+        focus: Object.fromEntries(SYSTEM_KEYS.map((s_) => [s_, va[s_] + (vb[s_] - va[s_]) * e])),
         pos: A.pos.clone().lerp(B.pos, e), at: A.at.clone().lerp(B.at, e), fov: A.fov + (B.fov - A.fov) * e,
       };
     }
@@ -235,7 +261,7 @@
     }
 
     // ---- State ----
-    const state = { t: 0, s: S0, sTarget: S0, playDir: 0, cam: 'orbit', seqStart: null, seqSec: 0 };
+    const state = { t: 0, focus: focusVec(FOCUS0), focusKey: FOCUS0, playDir: 0, cam: 'orbit', seqStart: null, seqSec: 0 };
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.dampingFactor = 0.08;
     controls.maxPolarAngle = Math.PI * 0.495;
@@ -245,11 +271,11 @@
     const playBtn = document.getElementById('play'), camBtn = document.getElementById('cam');
     const seqBtn = document.getElementById('seq'), recBtn = document.getElementById('rec');
     const tabs = [...document.querySelectorAll('#tabs button')];
-    tabs.forEach((b) => b.classList.toggle('on', b.dataset.view === VIEW0));
+    tabs.forEach((b) => b.classList.toggle('on', b.dataset.focus === FOCUS0));
 
-    function setView(view) {
-      state.sTarget = view === 'wsrls' ? 1 : 0;
-      tabs.forEach((b) => b.classList.toggle('on', b.dataset.view === view));
+    function setFocus(key) {
+      state.focusKey = FOCUS_KEYS.includes(key) ? key : 'all';
+      tabs.forEach((b) => b.classList.toggle('on', b.dataset.focus === state.focusKey));
     }
     function setT(t) { state.t = Math.min(Math.max(t, 0), 1); }
     function setCam(mode) {
@@ -258,37 +284,44 @@
       camBtn.textContent = `Camera: ${mode === 'orbit' ? 'orbit' : 'capture path'}`;
       camBtn.classList.toggle('on', mode === 'path');
     }
-    function caption({ t, s }, swapping) {
-      if (swapping === 'rls') return 'Swap the ring: the 6500 flies home, the RLS comes up (same routers, same Waveservers)';
-      if (swapping === '6500') return 'Swap the ring: the RLS flies home, the 6500 comes up (same routers, same Waveservers)';
+    // the one line system in focus, if the focus singles one out
+    const focused = (f) => { const on = SYSTEM_KEYS.filter((k) => f[k] > 0.5); return on.length === 1 ? on[0] : null; };
+    const FOCUS_CAPTION = {
+      '6500': 'The 6500 ring (A2–A4): the WSAi pair and the 6500-D7s ride it; 8192-1 and 8192-2 go in direct',
+      rls: 'The RLS ring (A5–A7): the Waveserver 5 pair rides it; 8110-3, 8112-1 and 8112-2 go in direct',
+      els: 'ELS and RLS-300 (A8–A9): the 5171 / 5164 aggregation goes in direct; the RLS-300 joins the rings',
+    };
+    function caption({ t, focus }) {
+      const one = t > 0.97 && focused(focus);
+      if (one) return FOCUS_CAPTION[one];
       if (t <= 0.001) return 'The EBC lab, rack layout option 9, seen from the conference room';
-      if (t < 0.15) return '1 · Spotlight the equipment in this network view';
-      if (t < 0.42) return '2 · The room, the racks and the other gear fade away';
-      if (t < 0.8) return '3 · Each device flies to its node: photonic, transport, then IP';
-      if (t < 0.97) return '4 · Layers grow; rack fibres hand over to links and wavelengths';
-      return 'The same equipment, as the CAL network view';
+      if (t < 0.15) return '1 · Spotlight the network gear in the racks';
+      if (t < 0.3) return '2 · The room, the racks and the other gear fade away';
+      if (t < 0.46) return '3 · The 6500, RLS and ELS drop together into one photonic layer';
+      if (t < 0.6) return '4 · The Waveservers and 6500-D7s ride their line systems: the transport layer';
+      if (t < 0.9) return '5 · The RSP network rises and attaches straight down: 1310 into the Waveservers, direct into the line systems';
+      return 'One network: RSP over Waveserver over 6500, RLS and ELS';
     }
-    function viewTitle(s) {
-      const v = s < 0.5 ? 'ws6500' : 'wsrls';
-      return `${v} · ${VIEWS[v].title} · EBC racks, option 9`;
+    function viewTitle(focus) {
+      const one = focused(focus);
+      return `EBC network · ${TITLE} · option 9${one ? ` · focus: ${SYSTEMS[one].label}` : ''}`;
     }
 
     // ---- One frame ----
-    let lastS = S0, swapDir = S0 ? '6500' : 'rls';
-    let stillMode = false; // MORPH.still(): in capture mode too, draw the given t / s, not the sequence
+    let stillMode = false; // MORPH.still(): in capture mode too, draw the given t / focus, not the sequence
     function frame(time, dt) {
       let shot = null;
       if (state.seqStart !== null || (CAPTURE && !stillMode)) {
         const q = seqAt(state.seqSec);
-        state.t = q.t; state.s = q.s; state.sTarget = q.s >= 0.5 ? 1 : 0;
+        state.t = q.t; state.focus = q.focus;
         shot = q;
       } else {
         if (state.playDir) {
           setT(state.t + state.playDir * dt / 14);
           if (state.t === 0 || state.t === 1) { state.playDir = 0; playBtn.textContent = '▶ Morph'; }
         }
-        const ds = state.sTarget - state.s;
-        state.s += Math.sign(ds) * Math.min(Math.abs(ds), dt / 3.5);
+        const target = focusVec(state.focusKey); // the focus eases over ~0.6 s
+        for (const k of SYSTEM_KEYS) { const d = target[k] - state.focus[k]; state.focus[k] += Math.sign(d) * Math.min(Math.abs(d), dt / 0.6); }
         if (state.cam === 'path') shot = shotForT(state.t);
       }
       if (shot) {
@@ -296,14 +329,12 @@
         if (camera.fov !== shot.fov) { camera.fov = shot.fov; camera.updateProjectionMatrix(); }
       }
       else controls.update();
-      morph.update({ t: state.t, s: state.s, time });
-      if (state.s > lastS + 1e-6) swapDir = 'rls'; else if (state.s < lastS - 1e-6) swapDir = '6500';
-      const swapping = state.s > 0.001 && state.s < 0.999 ? swapDir : null;
-      lastS = state.s;
-      hud.draw(viewTitle(state.s), caption(state, swapping));
+      morph.update({ t: state.t, focus: state.focus, time });
+      hud.draw(viewTitle(state.focus), caption(state), state.t > 0.84);
       if (!CAPTURE) {
         tInput.value = state.t; tOut.textContent = `t ${state.t.toFixed(2)}`;
-        tabs.forEach((b) => b.classList.toggle('on', (b.dataset.view === 'wsrls') === (state.sTarget > 0.5)));
+        const one = state.seqStart !== null ? (focused(state.focus) || 'all') : state.focusKey;
+        tabs.forEach((b) => b.classList.toggle('on', b.dataset.focus === one));
       }
       renderer.render(scene, camera);
       hud.render();
@@ -363,7 +394,7 @@
     camBtn.addEventListener('click', () => setCam(state.cam === 'orbit' ? 'path' : 'orbit'));
     seqBtn.addEventListener('click', () => (state.seqStart === null ? startSequence() : stopSequence()));
     recBtn.addEventListener('click', () => { if (!recorder) record(); else stopSequence(); });
-    tabs.forEach((b) => b.addEventListener('click', () => { stopSequence(); setView(b.dataset.view); }));
+    tabs.forEach((b) => b.addEventListener('click', () => { stopSequence(); setFocus(b.dataset.focus); }));
     addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLInputElement && e.key !== ' ') return;
       const step = e.shiftKey ? 0.1 : 0.02;
@@ -372,8 +403,7 @@
       else if (e.key === 'Home') { stopSequence(); setT(0); }
       else if (e.key === 'End') { stopSequence(); setT(1); }
       else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
-      else if (e.key === '1') { stopSequence(); setView('wsrls'); } // the tabs' order
-      else if (e.key === '2') { stopSequence(); setView('ws6500'); }
+      else if (['1', '2', '3', '4'].includes(e.key)) { stopSequence(); setFocus(FOCUS_KEYS[+e.key - 1]); } // the tabs' order
       else if (e.key === 'c' || e.key === 'C') setCam(state.cam === 'orbit' ? 'path' : 'orbit');
       else if (e.key === 'p' || e.key === 'P') state.seqStart === null ? startSequence() : stopSequence();
       else return;
@@ -397,13 +427,13 @@
     // For the console, tests and offline capture.
     window.MORPH = {
       THREE, scene, camera, renderer, model, morph, state, SEQ_LEN, seqAt,
-      setT, setView, setCam, startSequence, stopSequence, record,
+      setT, setFocus, setCam, startSequence, stopSequence, record,
       // Render one frame of the scripted sequence at `sec` (capture mode), deterministic.
       renderAt(sec) { stillMode = false; state.seqSec = sec; frame(sec, 0); },
-      // Render a still at a given t / s (sequence stopped), e.g. for screenshots.
-      still({ t, s, cam = 'path' }) {
+      // Render a still at a given t and focus ('all', '6500', 'rls', 'els'; sequence stopped).
+      still({ t, focus = 'all', cam = 'path' }) {
         stopSequence(); state.playDir = 0; setCam(cam); stillMode = true;
-        setT(t); state.s = s; state.sTarget = s >= 0.5 ? 1 : 0; lastS = s;
+        setT(t); setFocus(focus); state.focus = focusVec(state.focusKey);
         frame(performance.now() / 1000, 0);
       },
       // Renderer memory counters, for the capture's per-batch log.
