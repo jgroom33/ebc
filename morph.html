@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Ciena EBC — Room to Network</title>
   <link rel="icon" href="data:," />
   <style>
@@ -51,6 +51,10 @@
     #keys { position: fixed; bottom: 82px; left: 50%; transform: translateX(-50%); z-index: 11;
       font-size: 11px; letter-spacing: 0.5px; color: #9fb3c8; opacity: 0.75; pointer-events: none; white-space: nowrap; }
     body.capture .ui { display: none !important; }
+    /* Phones (and any very narrow window): no top or bottom nav, the scene fills the screen; a tap
+       pauses / resumes the loop. The HUD in the canvas drops its title and wraps the caption. */
+    body.mobile .ui { display: none !important; }
+    body.mobile, body.mobile canvas { touch-action: none; -webkit-tap-highlight-color: transparent; }
 
     #loader {
       position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; gap: 14px;
@@ -135,8 +139,17 @@
     const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.05, 200);
 
     let fixedSize = CAPTURE; // recording / capture: a fixed 1920×1080 drawing buffer, scaled to fit
+    // Phone layout: a touch screen whose short side is a phone's, or any window this narrow.
+    let MOBILE = false, PORTRAIT = false;
+    // A portrait phone fills its height better with the layers further apart and a steeper look down.
+    // spread: layer spacing (1 = CAL); pitch: extra degrees down on the network shots. Both blend in as the
+    // network forms (t), so the room shot and the drops stay as they are; yaw never changes.
+    const PORTRAIT_FIT = { spread: 10, pitch: 15, fov: 22 };
+    const isMobile = (w, h) => !CAPTURE && ((matchMedia('(pointer: coarse)').matches && Math.min(w, h) <= 600) || w <= 600);
     function fit() {
       const w = innerWidth, h = innerHeight;
+      MOBILE = isMobile(w, h); PORTRAIT = MOBILE && h > w;
+      document.body.classList.toggle('mobile', MOBILE);
       if (fixedSize) {
         renderer.setPixelRatio(1);
         renderer.setSize(REC_W, REC_H, false);
@@ -148,6 +161,8 @@
         renderer.setSize(w, h);
         camera.aspect = w / h;
       }
+      // a phone on its side: the story caption takes the bottom strip, so the view is lifted above it
+      if (MOBILE && w > h) camera.setViewOffset(w, h, 0, Math.round(h * 0.07), w, h); else camera.clearViewOffset();
       camera.updateProjectionMatrix();
       hud.resize();
     }
@@ -161,11 +176,12 @@
       let last = '';
       return {
         resize() { const s = renderer.getDrawingBufferSize(new THREE.Vector2()); cv.width = s.x; cv.height = s.y; last = ''; },
-        draw(title, caption, legend) {
-          const key = `${title}|${caption}|${legend}|${cv.width}`;
+        draw(title, caption, legend, paused) {
+          const key = `${title}|${caption}|${legend}|${paused}|${cv.width}x${cv.height}|${MOBILE}`;
           if (key === last) return; last = key;
           const W = cv.width, H = cv.height, u = H / 1080;
           ctx.clearRect(0, 0, W, H);
+          if (MOBILE && !fixedSize) { drawMobile(W, H, caption, legend, paused); tex.needsUpdate = true; return; }
           ctx.textBaseline = 'top';
           ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 14 * u;
           ctx.fillStyle = '#e4002b'; ctx.font = `700 ${40 * u}px "Segoe UI", Arial, sans-serif`;
@@ -200,6 +216,49 @@
         },
         render() { renderer.autoClear = false; renderer.render(hscene, hcam); renderer.autoClear = true; },
       };
+      // Phones: no title block; the caption wraps to the width at a legible size near the bottom; the
+      // legend, small, top left; a "Paused" pill top right while paused.
+      function drawMobile(W, H, caption, legend, paused) {
+        const px = W / innerWidth; // canvas pixels per CSS pixel (the renderer's pixel ratio)
+        const font = (cssPx, w = 600) => `${w} ${cssPx * px}px "Segoe UI", system-ui, Arial, sans-serif`;
+        const pill = (x, y, w, h) => { ctx.fillStyle = 'rgba(10,14,20,0.74)'; ctx.beginPath(); ctx.roundRect(x, y, w, h, 10 * px); ctx.fill(); };
+        ctx.shadowBlur = 0; ctx.textBaseline = 'middle';
+        if (caption) {
+          const fs = innerWidth > innerHeight ? 13 : Math.min(17, Math.max(13, innerWidth * 0.036)), maxW = W - 32 * px - 24 * px;
+          ctx.font = font(fs);
+          const lines = [];
+          for (const word of caption.split(' ')) {
+            const tryLine = lines.length ? `${lines[lines.length - 1]} ${word}` : word;
+            if (lines.length && ctx.measureText(tryLine).width <= maxW) lines[lines.length - 1] = tryLine;
+            else lines.push(word);
+          }
+          const lh = fs * 1.3 * px, bw = Math.min(W - 32 * px, Math.max(...lines.map((l) => ctx.measureText(l).width)) + 24 * px);
+          const bh = lines.length * lh + 14 * px, by = H - bh - (innerWidth > innerHeight ? 10 : 22) * px;
+          pill((W - bw) / 2, by, bw, bh);
+          ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center';
+          lines.forEach((l, i) => ctx.fillText(l, W / 2, by + 7 * px + lh * (i + 0.5)));
+          ctx.textAlign = 'left';
+        }
+        if (legend) {
+          const hex = (c) => '#' + c.toString(16).padStart(6, '0');
+          const rows = [[[GREY], '1310 into a Waveserver'], [SYSTEM_KEYS.map((k) => DIRECT[k]), `direct into ${SYSTEM_KEYS.map((k) => SYSTEMS[k].label).join(' / ')}`]];
+          ctx.font = font(11);
+          const tw = Math.max(...rows.map(([, txt]) => ctx.measureText(txt).width)), bw = tw + 72 * px, bh = 12 * px + rows.length * 18 * px;
+          pill(14 * px, 14 * px, bw, bh);
+          rows.forEach(([cols, txt], i) => {
+            const y = 14 * px + 6 * px + 18 * px * (i + 0.5);
+            cols.forEach((c, j) => { ctx.fillStyle = hex(c); ctx.fillRect(24 * px + j * 14 * px, y - 1.5 * px, 11 * px, 3 * px); });
+            ctx.fillStyle = '#eaf1f8'; ctx.fillText(txt, 24 * px + 52 * px, y);
+          });
+        }
+        if (paused) {
+          ctx.font = font(12, 700);
+          const txt = '❚❚  Paused · tap to play', bw = ctx.measureText(txt).width + 22 * px, bh = 26 * px;
+          pill(W - bw - 14 * px, 14 * px, bw, bh);
+          ctx.fillStyle = '#eaf1f8'; ctx.fillText(txt, W - bw - 14 * px + 11 * px, 14 * px + bh / 2);
+        }
+        ctx.textBaseline = 'top';
+      }
     })();
 
     // ---- Model + engine ----
@@ -209,6 +268,8 @@
     scene.add(morph.group);
     fit();
     addEventListener('resize', fit);
+    addEventListener('orientationchange', () => setTimeout(fit, 100)); // some phones report the new size late
+    visualViewport?.addEventListener('resize', fit);
 
     // ---- Capture camera: a conference-room seat, then a dolly through the glass ----
     const dio = morph.diorama;
@@ -265,7 +326,7 @@
     }
 
     // ---- State ----
-    const state = { t: 0, focus: focusVec(FOCUS0), focusKey: FOCUS0, playDir: 0, cam: 'path', seqStart: null, seqSec: 0, looping: false, pausedSec: 0 };
+    const state = { t: 0, focus: focusVec(FOCUS0), focusKey: FOCUS0, playDir: 0, cam: 'path', seqStart: null, seqSec: 0, looping: false, pausedSec: 0, spread: 1 };
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.dampingFactor = 0.08;
     controls.maxPolarAngle = Math.PI * 0.495;
@@ -313,9 +374,56 @@
 
     // ---- One frame ----
     let stillMode = false; // MORPH.still(): in capture mode too, draw the given t / focus, not the sequence
+    let renderSeqOnce = false; // MORPH.renderAt() outside capture mode: draw one frame of the sequence
+    let noHud = false; // MORPH.snapAt(sec, { hud: false }): the scene alone, to measure it
+    // The scripted shots are framed for 16:9. On a narrower screen (a phone, portrait or not), keep
+    // that horizontal view: widen the field of view up to 70°, then dolly straight back along the line
+    // of sight for the rest. Same direction (yaw, pitch), so nothing crops at the orbit's ends.
+    const FRAME_ASPECT = 16 / 9, FIT_FOV_MAX = 70, rad = THREE.MathUtils.degToRad, deg = THREE.MathUtils.radToDeg;
+    function fitWidth(shot) {
+      const a = camera.aspect;
+      if (MOBILE && a >= FRAME_ASPECT) { // a phone on its side: a little further back, clear of the caption strip
+        return { pos: shot.pos.clone().sub(shot.at).multiplyScalar(1.1).add(shot.at), at: shot.at, fov: shot.fov };
+      }
+      if (a >= FRAME_ASPECT - 1e-3) return shot;
+      const tanH = Math.tan(rad(shot.fov / 2)) * FRAME_ASPECT; // the 16:9 shot's horizontal half-angle
+      let fov = Math.min(Math.max(shot.fov, FIT_FOV_MAX), 2 * deg(Math.atan(tanH / a)));
+      // portrait network shots go telephoto (from far back, near orthographic) so the three layers keep one size
+      if (PORTRAIT && shot.w) fov += (PORTRAIT_FIT.fov - fov) * shot.w;
+      const k = tanH / (Math.tan(rad(fov / 2)) * a);
+      return { pos: shot.pos.clone().sub(shot.at).multiplyScalar(k).add(shot.at), at: shot.at, fov, w: shot.w };
+    }
+    const smooth01 = (a, b, x) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
+    const _tmpCam = new THREE.PerspectiveCamera(), _p = new THREE.Vector3();
+    // Portrait: raise the aim with the taller stack and look down more steeply, by how far the network has formed.
+    function portraitShot(shot, t, spread) {
+      const w = smooth01(0.3, 0.85, t);
+      if (!PORTRAIT || w <= 0) return shot;
+      const at = shot.at.clone(); at.y += (morph.layerHeight('ip', spread) - morph.layerHeight('ip', 1)) * 0.5 * w;
+      const d = shot.pos.clone().sub(shot.at), r = d.length(), hz = Math.hypot(d.x, d.z);
+      const elev = Math.min(Math.atan2(d.y, hz) + rad(PORTRAIT_FIT.pitch) * w, rad(80));
+      const pos = new THREE.Vector3(d.x / hz * Math.cos(elev) * r, Math.sin(elev) * r, d.z / hz * Math.cos(elev) * r).add(at);
+      return { pos, at, fov: shot.fov, w };
+    }
+    // ... and keep the whole stack (slab corners, captions) between the legend and the caption strip.
+    function portraitFitHeight(shot) {
+      if (!PORTRAIT || !shot.w) return shot;
+      const pts = morph.networkPoints(), top = 0.8, bottom = -0.72;
+      let k = 1;
+      for (let i = 0; i < 24; i++) {
+        _tmpCam.fov = shot.fov; _tmpCam.aspect = camera.aspect; _tmpCam.near = 0.05; _tmpCam.far = 200; _tmpCam.updateProjectionMatrix();
+        _tmpCam.position.copy(shot.pos).sub(shot.at).multiplyScalar(k).add(shot.at); _tmpCam.lookAt(shot.at); _tmpCam.updateMatrixWorld();
+        let ok = true;
+        for (const q of pts) { _p.copy(q).project(_tmpCam); if (_p.y > top || _p.y < bottom || Math.abs(_p.x) > 0.9) { ok = false; break; } }
+        if (ok) break;
+        k *= 1.05;
+      }
+      k = 1 + (k - 1) * shot.w;
+      return { pos: shot.pos.clone().sub(shot.at).multiplyScalar(k).add(shot.at), at: shot.at, fov: shot.fov };
+    }
     function frame(time, dt) {
       let shot = null;
-      if (state.seqStart !== null || (CAPTURE && !stillMode)) {
+      if (state.seqStart !== null || renderSeqOnce || (CAPTURE && !stillMode)) {
         const q = seqAt(state.seqSec);
         state.t = q.t; state.focus = q.focus;
         shot = q;
@@ -328,20 +436,27 @@
         for (const k of SYSTEM_KEYS) { const d = target[k] - state.focus[k]; state.focus[k] += Math.sign(d) * Math.min(Math.abs(d), dt / 0.6); }
         if (state.cam === 'path') shot = shotForT(state.t);
       }
+      // the layer spread eases toward its target (a portrait phone's, or 1), so a rotation doesn't jump
+      const spreadTarget = PORTRAIT ? PORTRAIT_FIT.spread : 1;
+      state.spread = renderSeqOnce || dt === 0 ? spreadTarget : state.spread + Math.sign(spreadTarget - state.spread) * Math.min(Math.abs(spreadTarget - state.spread), dt * 3);
+      // the stack stretches as its layers form (transport, then IP), so the camera backs off only as needed
+      const spread = 1 + (state.spread - 1) * smooth01(0.42, 0.8, state.t);
+      morph.setSpread(spread); // before fitting the camera to where the layers now stand
       if (shot) {
+        shot = portraitFitHeight(fitWidth(portraitShot(shot, state.t, spread)));
         camera.position.copy(shot.pos); camera.lookAt(shot.at); controls.target.copy(shot.at);
         if (camera.fov !== shot.fov) { camera.fov = shot.fov; camera.updateProjectionMatrix(); }
       }
       else controls.update();
-      morph.update({ t: state.t, focus: state.focus, time });
-      hud.draw(viewTitle(state.focus), caption(state), state.t > 0.84);
+      morph.update({ t: state.t, focus: state.focus, time, spread });
+      hud.draw(viewTitle(state.focus), caption(state), state.t > 0.84, MOBILE && !CAPTURE && state.seqStart === null && !renderSeqOnce);
       if (!CAPTURE) {
         tInput.value = state.t; tOut.textContent = `t ${state.t.toFixed(2)}`;
         const one = state.seqStart !== null ? (focused(state.focus) || 'all') : state.focusKey;
         tabs.forEach((b) => b.classList.toggle('on', b.dataset.focus === one));
       }
       renderer.render(scene, camera);
-      hud.render();
+      if (!noHud) hud.render();
     }
 
     // ---- Sequence + recording ----
@@ -402,7 +517,19 @@
     const resumeLoop = () => startSequence({ loop: true, from: state.pausedSec });
     seqBtn.addEventListener('click', () => (state.seqStart === null ? resumeLoop() : stopSequence()));
     // a drag or wheel on the scene pauses the loop too (the orbit camera is one C away)
-    for (const ev of ['pointerdown', 'wheel']) renderer.domElement.addEventListener(ev, () => { if (!recorder) stopSequence(); }, { passive: true });
+    // On a phone a tap toggles the loop (pause / resume); on a desktop a drag or wheel pauses it.
+    let tap = null;
+    renderer.domElement.addEventListener('pointerdown', (e) => {
+      tap = { x: e.clientX, y: e.clientY, at: performance.now() };
+      if (!MOBILE && !recorder) stopSequence();
+    }, { passive: true });
+    renderer.domElement.addEventListener('pointerup', (e) => {
+      if (!MOBILE || !tap || recorder) return;
+      const still = Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 12 && performance.now() - tap.at < 600;
+      tap = null;
+      if (still) (state.seqStart === null ? resumeLoop() : stopSequence());
+    }, { passive: true });
+    renderer.domElement.addEventListener('wheel', () => { if (!MOBILE && !recorder) stopSequence(); }, { passive: true });
     recBtn.addEventListener('click', () => { if (!recorder) record(); else stopSequence(); });
     tabs.forEach((b) => b.addEventListener('click', () => { stopSequence(); setFocus(b.dataset.focus); }));
     addEventListener('keydown', (e) => {
@@ -446,7 +573,14 @@
       THREE, scene, camera, renderer, model, morph, state, SEQ_LEN, seqAt,
       setT, setFocus, setCam, startSequence, stopSequence, resumeLoop, record, AUTOPLAY,
       // Render one frame of the scripted sequence at `sec` (capture mode), deterministic.
-      renderAt(sec) { stillMode = false; state.seqSec = sec; frame(sec, 0); },
+      renderAt(sec) { stillMode = false; state.seqSec = sec; renderSeqOnce = true; frame(sec, 0); renderSeqOnce = false; },
+      // renderAt() and return the canvas as a PNG data URL (read in the same task, so the frame is intact).
+      snapAt(sec, { hud: withHud = true } = {}) {
+        noHud = !withHud; this.renderAt(sec); noHud = false;
+        return renderer.domElement.toDataURL('image/png');
+      },
+      isMobile: () => MOBILE,
+      PORTRAIT_FIT, // tunable from the console: spread, pitch
       // Render a still at a given t and focus ('all', '6500', 'rls', 'els'; sequence stopped).
       still({ t, focus = 'all', cam = 'path' }) {
         stopSequence(); state.playDir = 0; setCam(cam); stillMode = true;

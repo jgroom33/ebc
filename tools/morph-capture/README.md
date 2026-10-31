@@ -46,3 +46,13 @@ to `lab-layouts.mjs`. `joinlog.mjs <root>` prints the morph's CAL-node → devic
 `autoplay-check.mjs <root> [loops]` checks the opening autoplay: capture camera, the sequence looping
 (Chrome RSS and renderer.info per 12 s over the loops), pause on each interaction, resume with Loop / P,
 `?autoplay=0` and `?capture` paused, and a recording as one pass.
+
+`mobile-check.mjs <root> <outdir> [--loop]` emulates iPhone 15 (393x852 @3x) and Pixel 8 (412x915 @2.625x),
+portrait and landscape: navs hidden, snapshots at t = 0, mid-morph, t = 1 and the orbit's ends, tap
+pause / resume, a live rotation, and (with --loop) Chrome RSS over one loop. `browser.mjs` takes a
+`device` option (deviceScaleFactor, isMobile, hasTouch); `MORPH.snapAt(sec)` returns one frame of the
+sequence as a PNG data URL outside capture mode.
+
+`portrait-measure.mjs <root> <outdir> [sec ...]` snapshots both phones in portrait without the HUD and
+reports how much of the height (and width) the network fills; P_SPREAD / P_PITCH / P_FOV env vars try other
+portrait settings.
