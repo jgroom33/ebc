@@ -50,7 +50,7 @@ Spotlight and Fiber Ring stay on across a switch, so you can watch them move:
 | Option 4, Access to Core | Access → TDM → Aggregation → Converged Metro → DCI across the top; ELS over 6500 over RLS below | `?layout=4` |
 | Option 5, Photonic in the Center | Route/switch · RLS over 6500 photonic · Waveserver/WSAi over 6500-D7 · DCOM/Outdoor | `?layout=5` |
 | Option 6, Portfolio Vertical Slices | One rack each: Access+TDM · Aggregation · Converged Metro · ELS · 6500 photonic · 6500 services · RLS · Waveserver · DCOM/Outdoor | `?layout=6` |
-| Option 9, Photonic on the bottom | Option 1 with devices re-placed: 6500 Services (A1, under Access) · 6500 (A2–A4) · RLS (A5–A7) · RLS-300 over ELS (A8–A9); A10 empty; TDM to the back row (B4); no DCOM / Outdoor | `?layout=9` |
+| Option 9, Photonic on the bottom | Three bands across A2–A9: **Metro & Aggregation** (IP) on top, **Datacenter Interconnect and Waveserver** (transport) in the middle, photonic at the bottom: 6500 (A2–A4) · RLS (A5–A7) · RLS-300 over ELS (A8–A9). A1: Access over 6500 Services; A10 empty; TDM to the back row (B4) | `?layout=9` |
 
 Racks never move; whole sections (devices, signs, placards, fibers, fiber ring) move
 between them. In options 1–3 the RLS / Converged Metro section is on A5–A7, the most
@@ -68,23 +68,27 @@ same tagged node signs). Fibers and fiber rings follow their devices. The **Fron
 elevation ›** link at the top right opens the flat elevation of whichever layout is showing.
 
 Option 9 (the 8th dot on the bar; its `id: 9` keeps the URL number) starts from Option 1
-(`base: 1`) and re-places devices on top of it, packet on top, transport (the 6500-D7
-services shelves) in the middle, photonic at the bottom:
+(`base: 1`) and re-places devices on top of it as three bands across A2–A9, the same layers as
+the morph: IP on top, transport in the middle, photonic at the bottom.
 
-- No `shift`: the 6500 (A2–A4), the RLS (A5–A7) and the packet gear on top stay where
-  Option 1 has them. (`shift` moves a rack's lower section, devices topping out under a given
-  U, N racks with named zone signs.)
-- `moves` places single devices: the 4 TDM shelves go to the empty back-row rack B4 (same U),
-  both 6500-D7 services shelves with their FMTs to A1 under Access (U11–U26), Uptown to A8
-  and Downtown to A9 (U23–U26 with node sign), and the ELS shelves into A8–A9 below them
-  (U5–U13).
-- `dropZones` removes the TDM, DCOM, Outdoor and old ELS signs; `addZones` adds **6500
-  Services** (A1), **RLS-300** (A8–A9) and **ELS** (A8–A9, U14–U22); `alignedZones` lists the
-  signs that share the lower band (U27–U34): 6500, RLS, 6500 Services, RLS-300.
+- Bottom (photonic, U1–U26, signs in one band at U27–U34): 6500 on A2–A4 and RLS on A5–A7 as in
+  Option 1; Uptown (A8) and Downtown (A9) at U23–U26 under **RLS-300**, with the ELS shelves
+  below them (U5–U13) under an **ELS** sign at U14–U22.
+- Middle (transport): the Waveserver 5 / WSAi pairs at U35–U36, West over the 6500 in A2 and
+  East in A4, under one **Datacenter Interconnect and Waveserver** sign across A2–A9 (U37–U41).
+- Top (IP, U42 up): all Converged Metro and Aggregation gear under one **Metro & Aggregation**
+  sign across A2–A9 (U49+). Each Converged Metro group (an 8192 with its gear) spans two
+  adjacent racks over the 6500 / RLS (A2–A3, A4–A5, A6–A7); Aggregation stays over the ELS.
+- A1 keeps Access on top with the two 6500-D7 services shelves below (U11–U26, **6500
+  Services** sign). A10 is empty. TDM goes to the empty back-row rack B4 (same U).
 
-Ring-node signs follow the device just above them; fibers and rings follow by device name.
-`moveLabData` in `index.html` logs a console error if a move puts gear outside a rack or on
-top of other gear. Option 9 has no flat elevation in `front-row/` yet.
+The layout entry's keys, applied by `moveLabData`: `moves` (one device to a rack and U),
+`stacks` (devices stacked bottom-up from a U), `shift` (a rack's lower section N racks; unused
+by Option 9 now), `dropZones` / `addZones`, and `alignedZones` (the signs sharing the lower
+band). A zone with `keepAspect` draws its sign texture at the sign's own aspect, so the 8-rack
+signs aren't stretched. Ring-node signs follow the device just above them; fibers and rings
+follow by device name. `moveLabData` logs a console error if a move puts gear outside a rack
+or on top of other gear. Option 9 has no flat elevation in `front-row/` yet.
 
 ## Front-row elevations
 

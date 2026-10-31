@@ -718,7 +718,7 @@
       // from `base` (Option 1) and re-places devices on top of it. Bottom of the racks photonic,
       // the layer above it transport, packet on top as in Option 1. See moveLabData for the keys.
       { id: 9, base: 1, name: 'Option 9 · Photonic on the bottom',
-        desc: 'D7 · 6500 · RLS · RLS-300 over ELS',
+        desc: 'IP · Transport · Photonic bands',
         // Lower (photonic) sections only — devices topping out below U30; packet stays put.
         // The 6500 (A2–A4) and the RLS (A5–A7) stay where Option 1 has them: no shift.
         moves: [
@@ -741,8 +741,28 @@
           { name: 'ELS-2-T-2', rack: 'A9', ru: 5 }, { name: 'ELS-2-O-2', rack: 'A9', ru: 8 },
           { name: 'ELS-1-T-2', rack: 'A9', ru: 10 }, { name: 'ELS-1-O-2', rack: 'A9', ru: 13 },
         ],
-        dropZones: ['TDM', 'DCOM', 'Outdoor', 'ELS'],
+        // Three bands across A2–A9, as in the morph's layers. TOP = IP: Converged Metro and
+        // Aggregation as one 'Metro & Aggregation' block, U42 up (sign U49+). Each Converged
+        // Metro group (one 8192 with its gear) spans two adjacent racks over the 6500 / RLS;
+        // Aggregation stays over the ELS (A8–A9). MIDDLE = transport: the Waveservers at U35–U36
+        // (just above the photonic signs), West over the 6500 in A2 and East in A4 as before,
+        // under one 'Datacenter Interconnect and Waveserver' sign (U37–U41).
+        stacks: [                                     // bottom-up from `ru`, no gaps
+          { rack: 'A2', ru: 35, names: ['WS-2P', 'Waveserver-5-West-1'] },
+          { rack: 'A4', ru: 35, names: ['WS-1P', 'Waveserver-5-East-1'] },
+          { rack: 'A2', ru: 42, names: ['8192-1', '8114-1', '8114-2'] },
+          { rack: 'A3', ru: 42, names: ['5166-1', '5170-4', '5170-3', '5170-2', '5170-1'] },
+          { rack: 'A4', ru: 42, names: ['8192-2', '8110-1'] },
+          { rack: 'A5', ru: 42, names: ['8110-3', '5166-2'] },
+          { rack: 'A6', ru: 42, names: ['8192-3', '8110-4'] },
+          { rack: 'A7', ru: 42, names: ['8112-2', '8112-1', '8110-2'] },
+          { rack: 'A8', ru: 42, names: ['5130-1', '5171-1', '5164-5', '5164-6', '5164-7', '5164-8'] },
+          { rack: 'A9', ru: 42, names: ['5130-2', '5171-2', '5164-1', '5164-2', '5164-3', '5164-4'] },
+        ],
+        dropZones: ['TDM', 'DCOM', 'Outdoor', 'ELS', 'Converged Metro', 'Aggregation', 'Datacenter Interconnect'],
         addZones: [
+          { rackStart: 'A2', rackEnd: 'A9', label: 'Metro & Aggregation', ru: 49, h: 3, keepAspect: true },
+          { rackStart: 'A2', rackEnd: 'A9', label: 'Datacenter Interconnect and Waveserver', ru: 37, h: 3, keepAspect: true },
           { rackStart: 'A1', rackEnd: 'A1', label: '6500 Services', ru: 28, h: 3 },
           { rackStart: 'A8', rackEnd: 'A9', label: 'RLS-300', ru: 28, h: 3 },
           { rackStart: 'A8', rackEnd: 'A9', label: 'ELS', ru: 14, h: 3 },
@@ -822,13 +842,22 @@
     //           belowRU moves `by` racks (all rules read the base, so chains don't cascade), and
     //           the named zones move with it;
     //   moves:  [{ name, rack, ru }] — one device to any rack (front or back) and U; wins over shift;
+    //   stacks: [{ rack, ru, names }] — devices stacked bottom-up from `ru` with no gaps (moves);
     //   dropZones / addZones — zone signs removed / added;
     //   alignedZones — the zone labels that share one lower sign band, in place of the default
     //                  6500 / ELS / RLS / TDM.
     // A ring-node sign follows the device just above it (its node's bottom part). Fibers and
     // rings are keyed by device name, so they follow on their own.
     function moveLabData(base, L) {
+      const hOf = new Map(Object.values(base.racks).flatMap(rk => rk.devices.map(d => [d.name, d.h])));
       const moveOf = new Map((L.moves || []).map(m => [m.name, m]));
+      for (const st of L.stacks || []) {
+        let ru = st.ru;
+        for (const name of st.names) {
+          if (!hOf.has(name)) console.error(`layout ${L.name}: no device '${name}' to stack`);
+          moveOf.set(name, { name, rack: st.rack, ru }); ru += hOf.get(name) ?? 1;
+        }
+      }
       const shiftRack = (id, d) => {
         const s = (L.shift || []).find(s => s.racks.includes(id) && d.ru + d.h - 1 < s.belowRU);
         return s ? 'A' + (+id.slice(1) + s.by) : id;
@@ -929,9 +958,13 @@
     // headers. The whole canvas is filled (OPAQUE) so the sign renders into the glass
     // transmission pass and is visible through the glass from the conference room —
     // transparent overlays are skipped by that pass and would be invisible.
-    function makeBigLabel(text, wM, hM) {
+    // keepAspect: size the canvas to the sign's aspect (up to 4096 px wide) instead of 1024 px
+    // with a 128 px floor, which stretches the text on very wide, short signs (Option 9's
+    // 8-rack bands). Opt-in per zone so the existing layouts' signs render as before.
+    function makeBigLabel(text, wM, hM, { keepAspect = false } = {}) {
       const cv = document.createElement('canvas');
-      cv.width = 1024; cv.height = Math.max(128, Math.round(1024 * hM / wM));
+      if (keepAspect) { cv.width = Math.min(4096, Math.round(256 * wM / hM)); cv.height = Math.round(cv.width * hM / wM); }
+      else { cv.width = 1024; cv.height = Math.max(128, Math.round(1024 * hM / wM)); }
       const ctx = cv.getContext('2d'), W = cv.width, Hc = cv.height;
       ctx.fillStyle = '#1b2838'; ctx.fillRect(0, 0, W, Hc);        // solid dark-slate plate
       ctx.fillStyle = '#e4002b'; ctx.fillRect(0, Hc - Hc * 0.09, W, Hc * 0.09);  // Ciena-red base bar
@@ -1204,7 +1237,7 @@
         const hM = hRU * U_M;
         const xs = xOfOrder(orderOf(z.rackStart)), xe = xOfOrder(orderOf(z.rackEnd));
         const left = Math.min(xs, xe) - RACK_W / 2, right = Math.max(xs, xe) + RACK_W / 2;
-        const sign = makeBigLabel(z.label, right - left, hM);
+        const sign = makeBigLabel(z.label, right - left, hM, { keepAspect: !!z.keepAspect });
         sign.position.set((left + right) / 2, RACK_PLINTH + (bottom - 1) * U_M + hM / 2, signZ);
         g.add(sign);
       }
