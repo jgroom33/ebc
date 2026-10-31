@@ -46,6 +46,7 @@ export const PHASES = {
   signs: [0.1, 0.28],
   shell: [0.12, 0.4], // room shell fades
   racks: [0.16, 0.42], // racks and unrelated devices fade
+  back: [0.08, 0.16], // the back rack row goes first: it would show through the clearing front row, offset by perspective
   ghost: [0.3, 0.55], // a faint outline of the racks while the devices leave, so you can see where they came from
   ghostOut: [0.6, 0.85], // and gone before the network has formed (labels come at 0.88)
   fly: { ph: [0.3, 0.6], tr: [0.4, 0.68], ip: [0.48, 0.78] }, // staggered photonic, transport, IP
@@ -247,7 +248,7 @@ const nodeEdge = (n) => (n.type === 'amp' ? 0.8 : 0.68) * S; // a ribbon starts 
 // =============================================================================================
 export function createMorph(model, { log = console } = {}) {
   const root = new THREE.Group(); root.name = 'EBCMorph';
-  const ch = { shell: new Channel(), racks: new Channel(), signs: new Channel(), ghost: new Channel() };
+  const ch = { shell: new Channel(), racks: new Channel(), back: new Channel(), signs: new Channel(), ghost: new Channel() };
   const mk = (name, channel) => { const g = new THREE.Group(); g.name = name; root.add(g); if (channel) channel.groups.push(g); return g; };
 
   // ---- Lights (dim for the spotlight, then a key light for the diorama) ----
@@ -336,29 +337,36 @@ export function createMorph(model, { log = console } = {}) {
     edge: ch.racks.add(new THREE.LineBasicMaterial({ color: 0xf6a623 })),
   };
   rk.devD.userData.emissive = 0.16; rk.devP.userData.emissive = 0.06;
+  // The back row (servers and lab switches, in neither network view) has its own copies on the `back`
+  // channel, so it is gone before the front cabinets turn see-through.
+  const backRow = mk('BackRow', ch.back);
+  const bk = Object.fromEntries(Object.entries(rk).map(([key, mat]) => {
+    const c = mat.clone(); c.userData = { ...mat.userData }; return [key, ch.back.add(c)];
+  }));
   const ghosts = mk('RackGhosts', ch.ghost);
   const ghostMat = ch.ghost.add(new THREE.LineBasicMaterial({ color: 0x6f8396, transparent: true, opacity: 0.35 }));
   const devPos = new Map(), devOf = new Map();
   const rowOrders = { front: [], back: [] };
   for (const [id, r] of Object.entries(lab.racks)) {
     const x = xOfOrder(r.order), z = r.row === 'back' ? BACK_Z : FRONT_Z;
-    racks.add(at(box(RACK_W, RACK_H, RACK_D, rk.rack), x, RACK_H / 2, z));
+    const [grp, M, labelCh] = r.row === 'back' ? [backRow, bk, ch.back] : [racks, rk, ch.racks];
+    grp.add(at(box(RACK_W, RACK_H, RACK_D, M.rack), x, RACK_H / 2, z));
     if (r.row === 'front') {
       const gh = new THREE.LineSegments(UNIT_EDGES, ghostMat);
       gh.scale.set(RACK_W, RACK_H, RACK_D); gh.position.set(x, RACK_H / 2, z);
       ghosts.add(gh);
     }
-    const lbl = labelPlane(id, 0.26, 0.1, ch.racks.add(new THREE.MeshBasicMaterial({ transparent: true })));
-    racks.add(at(lbl, x, RACK_H + 0.07, z + RACK_D / 2 - 0.01));
+    const lbl = labelPlane(id, 0.26, 0.1, labelCh.add(new THREE.MeshBasicMaterial({ transparent: true })));
+    grp.add(at(lbl, x, RACK_H + 0.07, z + RACK_D / 2 - 0.01));
     for (const dv of r.devices) {
       const y = RACK_PLINTH + (dv.ru - 1 + dv.h / 2) * U_M;
       devPos.set(dv.name, new THREE.Vector3(x, y, z + DEV_FRONT));
       devOf.set(dv.name, dv);
       if (flyerNames.has(dv.name)) continue;
-      const panel = at(box(DEV_W, dv.h * U_M - 0.18 * IN, DEV_D, dv.state === 'deployed' ? rk.devD : rk.devP), x, y, z + DEV_FRONT);
-      const e = new THREE.LineSegments(UNIT_EDGES, rk.edge);
+      const panel = at(box(DEV_W, dv.h * U_M - 0.18 * IN, DEV_D, dv.state === 'deployed' ? M.devD : M.devP), x, y, z + DEV_FRONT);
+      const e = new THREE.LineSegments(UNIT_EDGES, M.edge);
       e.scale.set(DEV_W, dv.h * U_M - 0.18 * IN, DEV_D); e.position.copy(panel.position);
-      racks.add(panel, e);
+      grp.add(panel, e);
     }
     rowOrders[r.row].push(r.order);
   }
@@ -367,7 +375,7 @@ export function createMorph(model, { log = console } = {}) {
     for (let i = 0; i < orders.length - 1; i++) {
       if (orders[i + 1] - orders[i] !== 1) continue;
       const z = (row === 'back' ? BACK_Z : FRONT_Z) + 3 * IN;
-      racks.add(at(box(6 * IN - 0.2 * IN, RACK_H, RACK_D + 6 * IN, rk.mgr), (xOfOrder(orders[i]) + xOfOrder(orders[i + 1])) / 2, RACK_H / 2, z));
+      (row === 'back' ? backRow : racks).add(at(box(6 * IN - 0.2 * IN, RACK_H, RACK_D + 6 * IN, (row === 'back' ? bk : rk).mgr), (xOfOrder(orders[i]) + xOfOrder(orders[i + 1])) / 2, RACK_H / 2, z));
     }
   }
   // ---- Zone signs (a 4U plate centred on each zone's RU) ----
@@ -573,7 +581,7 @@ export function createMorph(model, { log = console } = {}) {
     const spot = smooth(...ph.spot, t);
     const shellA = 1 - smooth(...ph.shell, t), racksA = 1 - smooth(...ph.racks, t);
     const ghostA = smooth(...ph.ghost, t) * (1 - smooth(...ph.ghostOut, t));
-    ch.shell.set(shellA); ch.signs.set(1 - smooth(...ph.signs, t)); ch.racks.set(racksA); ch.ghost.set(ghostA);
+    ch.shell.set(shellA); ch.signs.set(1 - smooth(...ph.signs, t)); ch.racks.set(racksA); ch.back.set(1 - smooth(...ph.back, t)); ch.ghost.set(ghostA);
     // lights: the room dims for the spotlight, the diorama gets a key light
     const dio = smooth(0.4, 0.75, t);
     lights.hemi.intensity = 0.9 * (1 - 0.75 * spot) + 0.55 * dio;
@@ -582,7 +590,7 @@ export function createMorph(model, { log = console } = {}) {
     lights.key.intensity = 1.6 * dio;
     lights.spot.intensity = 2.2 * spot * (1 - smooth(0.35, 0.6, t));
     m.lens.emissiveIntensity = 1.3 * (1 - 0.9 * spot);
-    for (const mm of [rk.devD, rk.devP]) mm.emissiveIntensity = mm.userData.emissive * (1 - 0.85 * spot);
+    for (const mm of [rk.devD, rk.devP, bk.devD, bk.devP]) mm.emissiveIntensity = mm.userData.emissive * (1 - 0.85 * spot);
 
     // flyers
     for (const f of flyers.values()) {
