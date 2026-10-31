@@ -145,6 +145,12 @@ and what rides on it forward.
   tabs, a drag or wheel on the scene, the Morph button) pauses it where it is; the **Loop** button (or
   P) resumes it from there. `morph.html?autoplay=0` opens paused (for development); `?capture` never
   autoplays.
+- **On a phone** (a touch screen with a phone-sized short side, or any window 600 px wide or less) the
+  top and bottom navs are hidden and the scene fills the screen, portrait or landscape. The scripted
+  camera keeps its 16:9 framing across the width (it widens the field of view up to 70°, then backs
+  off along its line of sight), so the room and the whole diorama with its captions fit the width at
+  every moment of the loop. The story caption wraps under the scene (one line on a phone on its side,
+  with the view lifted above it); the legend sits small, top left. A tap pauses / resumes the loop.
 - One value `t` (0 = room, 1 = network) drives the whole morph and is evaluated every frame, so it
   scrubs and reverses: slider, ← / → (shift for bigger steps), Home / End, space to play.
   1–4 set the focus (All / 6500 / RLS / ELS, the tabs' order).

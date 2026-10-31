@@ -2,12 +2,12 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { execSync } from 'node:child_process';
-export async function openMorph(url, { capture = true, width = 1920, height = 1080, raw = false } = {}) {
+export async function openMorph(url, { capture = true, width = 1920, height = 1080, raw = false, device = {} } = {}) {
   const server = await chromium.launchServer({ headless: true,
     args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--enable-precise-memory-info'] });
   const top = server.process().pid;
   const browser = await chromium.connect(server.wsEndpoint());
-  const page = await browser.newPage({ viewport: { width, height } });
+  const page = await browser.newPage({ viewport: { width, height }, ...device }); // device: deviceScaleFactor, isMobile, hasTouch
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(String(e)));
