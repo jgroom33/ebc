@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ciena EBC — Room to Network</title>
+  <link rel="icon" href="data:," />
+  <style>
+    :root { color-scheme: dark; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; background: #0b0f14; }
+    #app { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+    canvas { display: block; }
+    .ui { font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif; color: #eaf1f8; user-select: none; }
+
+    /* Focus filters on the one network view (All / 6500 / RLS / ELS) */
+    #tabs {
+      position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 12;
+      display: flex; gap: 6px; padding: 6px; border-radius: 18px;
+      background: rgba(14,20,29,0.80); border: 1px solid rgba(120,170,230,0.22);
+      box-shadow: 0 12px 36px rgba(0,0,0,0.45);
+    }
+    #tabs button, #bar button {
+      font: inherit; color: inherit; cursor: pointer; border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.05);
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    #tabs button { padding: 8px 18px; font-size: 15px; font-weight: 700; letter-spacing: 1px; }
+    #tabs button small { display: block; font-size: 11px; font-weight: 500; letter-spacing: 0.5px; opacity: 0.7; }
+    #tabs button.on { background: rgba(47,143,230,0.30); border-color: rgba(47,143,230,0.7); }
+    #tabs button:hover, #bar button:hover { border-color: rgba(47,143,230,0.6); }
+    #back-link {
+      position: fixed; top: 22px; right: 26px; z-index: 12; font-size: 13px; font-weight: 600;
+      letter-spacing: 1px; color: #eaf1f8; text-decoration: none; padding: 8px 14px; border-radius: 16px;
+      background: rgba(14,20,29,0.80); border: 1px solid rgba(120,170,230,0.22);
+    }
+
+    /* Morph controls */
+    #bar {
+      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 12;
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 18px;
+      width: min(980px, calc(100vw - 32px)); flex-wrap: wrap;
+      background: rgba(14,20,29,0.82); border: 1px solid rgba(120,170,230,0.22);
+    }
+    #bar button { padding: 7px 12px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+    #bar button.on { background: rgba(47,143,230,0.30); border-color: rgba(47,143,230,0.7); }
+    #bar button.rec.on { background: rgba(228,0,43,0.35); border-color: #e4002b; }
+    #bar .scrub { flex: 1 1 260px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: #9fb3c8; }
+    #bar input[type=range] { flex: 1; accent-color: #2f8fe6; }
+    #bar output { font-variant-numeric: tabular-nums; width: 64px; text-align: right; }
+    #keys { position: fixed; bottom: 82px; left: 50%; transform: translateX(-50%); z-index: 11;
+      font-size: 11px; letter-spacing: 0.5px; color: #9fb3c8; opacity: 0.75; pointer-events: none; white-space: nowrap; }
+    body.capture .ui { display: none !important; }
+
+    #loader {
+      position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; gap: 14px;
+      align-items: center; justify-content: center; background: #0b0f14; color: #6f86a0;
+      font: 14px "Segoe UI", system-ui, sans-serif; transition: opacity 0.6s ease;
+    }
+    #loader.hidden { opacity: 0; pointer-events: none; }
+  </style>
+
+  <!-- three.js from CDN (no build step); same version as index.html -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="loader">Building the room…</div>
+
+  <nav id="tabs" class="ui" aria-label="Focus on a line system">
+    <button data-focus="all" class="on">All<small>one network</small></button>
+    <button data-focus="6500">6500<small>6500 ring · A2–A4</small></button>
+    <button data-focus="rls">RLS<small>RLS ring · A5–A7</small></button>
+    <button data-focus="els">ELS<small>ELS · RLS-300 · A8–A9</small></button>
+  </nav>
+  <a id="back-link" class="ui" href="./?layout=9">‹ Room (option 9)</a>
+
+  <div id="keys" class="ui">← / → scrub · space play · 1–4 focus · C camera · P loop</div>
+  <div id="bar" class="ui">
+    <button id="play" title="Play / pause the morph (space)">▶ Morph</button>
+    <label class="scrub">room
+      <input id="t" type="range" min="0" max="1" step="0.001" value="0" aria-label="Morph" />
+      network <output id="tval">t 0.00</output>
+    </label>
+    <button id="cam" title="Orbit with the mouse, or ride the capture camera (C)">Camera: orbit</button>
+    <button id="seq" title="Play the scripted sequence on a loop, or pause it (P)">▶ Loop</button>
+    <button id="rec" class="rec" title="Record the sequence at 1920×1080 to a .webm">● Record 1080p</button>
+  </div>
+
+  <!-- ======================================================================
+       The EBC room morphing into the CAL network views. The model (morph/model.mjs)
+       and the engine (morph/engine.mjs) are renderer-agnostic, for reuse by the
+       WebXR page; this page adds the desktop renderer, the controls, the scripted
+       capture camera and the recorder.
+       URL: ?capture  — fixed 1920×1080 canvas, no UI, frames rendered on demand
+                        by MORPH.renderAt(seconds) (for offline video capture).
+            ?focus=6500 | rls | els — open with one line system in focus (default: all).
+            ?autoplay=0 — open paused (by default the sequence plays on a loop with the capture camera).
+       ====================================================================== -->
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+    import { buildModel, SYSTEMS, SYSTEM_KEYS, TITLE, DIRECT, GREY } from './morph/model.mjs';
+    import { createMorph } from './morph/engine.mjs';
+
+    const params = new URLSearchParams(location.search);
+    const CAPTURE = params.has('capture');
+    // Opening (not ?capture): the capture camera, and the scripted sequence playing on a loop; any
+    // interaction pauses it, the Loop button (or P) resumes it where it paused. ?autoplay=0 opens paused.
+    const AUTOPLAY = !CAPTURE && params.get('autoplay') !== '0';
+    // Focus: one network view; a filter brings one line system (and what rides on it) forward.
+    const FOCUS_KEYS = ['all', ...SYSTEM_KEYS];
+    const FOCUS0 = FOCUS_KEYS.includes(params.get('focus')) ? params.get('focus') : 'all';
+    const focusVec = (key) => Object.fromEntries(SYSTEM_KEYS.map((k) => [k, key === 'all' || key === k ? 1 : 0]));
+    if (CAPTURE) document.body.classList.add('capture');
+    const REC_W = 1920, REC_H = 1080;
+
+    // ---- Renderer / scene / camera ----
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: CAPTURE });
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
+    document.getElementById('app').appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b0f14);
+    scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+    const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.05, 200);
+
+    let fixedSize = CAPTURE; // recording / capture: a fixed 1920×1080 drawing buffer, scaled to fit
+    function fit() {
+      const w = innerWidth, h = innerHeight;
+      if (fixedSize) {
+        renderer.setPixelRatio(1);
+        renderer.setSize(REC_W, REC_H, false);
+        const k = Math.min(w / REC_W, h / REC_H);
+        Object.assign(renderer.domElement.style, { width: `${REC_W * k}px`, height: `${REC_H * k}px` });
+        camera.aspect = REC_W / REC_H;
+      } else {
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        renderer.setSize(w, h);
+        camera.aspect = w / h;
+      }
+      camera.updateProjectionMatrix();
+      hud.resize();
+    }
+
+    // ---- In-canvas HUD (title + caption), so recordings carry it too ----
+    const hud = (() => {
+      const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
+      const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+      const hscene = new THREE.Scene(), hcam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+      hscene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false })));
+      let last = '';
+      return {
+        resize() { const s = renderer.getDrawingBufferSize(new THREE.Vector2()); cv.width = s.x; cv.height = s.y; last = ''; },
+        draw(title, caption, legend) {
+          const key = `${title}|${caption}|${legend}|${cv.width}`;
+          if (key === last) return; last = key;
+          const W = cv.width, H = cv.height, u = H / 1080;
+          ctx.clearRect(0, 0, W, H);
+          ctx.textBaseline = 'top';
+          ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 14 * u;
+          ctx.fillStyle = '#e4002b'; ctx.font = `700 ${40 * u}px "Segoe UI", Arial, sans-serif`;
+          ctx.fillText('CIENA', 44 * u, 34 * u);
+          ctx.fillStyle = '#eaf1f8'; ctx.font = `600 ${22 * u}px "Segoe UI", Arial, sans-serif`;
+          ctx.fillText(title, 44 * u, 84 * u);
+          if (caption) {
+            ctx.font = `600 ${30 * u}px "Segoe UI", Arial, sans-serif`;
+            const w = ctx.measureText(caption).width + 56 * u, x = (W - w) / 2, y = H - (CAPTURE || fixedSize ? 96 : 170) * u;
+            ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(10,14,20,0.72)';
+            ctx.beginPath(); ctx.roundRect(x, y, w, 56 * u, 14 * u); ctx.fill();
+            ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center';
+            ctx.fillText(caption, W / 2, y + 12 * u);
+            ctx.textAlign = 'left';
+          }
+          if (legend) { // the two kinds of drop from the RSP gear down, top right
+            const hex = (c) => '#' + c.toString(16).padStart(6, '0');
+            const rows = [[[GREY], '1310 client into a Waveserver'],
+              [SYSTEM_KEYS.map((k) => DIRECT[k]), `direct into the ${SYSTEM_KEYS.map((k) => SYSTEMS[k].label).join(' / ')}`]];
+            ctx.font = `600 ${22 * u}px "Segoe UI", Arial, sans-serif`;
+            const tw = Math.max(...rows.map(([, txt]) => ctx.measureText(txt).width));
+            const bw = tw + 150 * u, bh = 30 * u + rows.length * 38 * u, bx = W - bw - 40 * u, by = 34 * u;
+            ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(10,14,20,0.72)';
+            ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 14 * u); ctx.fill();
+            rows.forEach(([cols, txt], i) => {
+              const y = by + 20 * u + i * 38 * u + 13 * u;
+              cols.forEach((c, j) => { ctx.fillStyle = hex(c); ctx.fillRect(bx + 18 * u + j * 30 * u, y - (cols.length > 1 ? 3 : 2) * u, 24 * u, (cols.length > 1 ? 6 : 4) * u); });
+              ctx.fillStyle = '#eaf1f8'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + 120 * u, y); ctx.textBaseline = 'top';
+            });
+          }
+          tex.needsUpdate = true;
+        },
+        render() { renderer.autoClear = false; renderer.render(hscene, hcam); renderer.autoClear = true; },
+      };
+    })();
+
+    // ---- Model + engine ----
+    const indexHtml = await fetch('index.html').then((r) => r.text());
+    const model = buildModel(indexHtml);
+    const morph = createMorph(model);
+    scene.add(morph.group);
+    fit();
+    addEventListener('resize', fit);
+
+    // ---- Capture camera: a conference-room seat, then a dolly through the glass ----
+    const dio = morph.diorama;
+    const SEAT = { pos: new THREE.Vector3(-0.55, 1.32, 3.55), at: new THREE.Vector3(dio.x, 1.3, morph.rackFace), fov: 50 };
+    // Every shot on the path keeps the seat's azimuth (yaw), so the move from the flat room view to the
+    // diorama only pitches, rises and dollies: a shot `dz` in front of its target, `y` high, sits at the
+    // x that keeps that yaw. (A vantage off the centre line swung the view ~15° on the way in.)
+    const AZ = (SEAT.pos.x - SEAT.at.x) / (SEAT.pos.z - SEAT.at.z);
+    const onAzimuth = (at, dz, y, fov) => ({ pos: new THREE.Vector3(at.x + AZ * dz, y, at.z + dz), at, fov });
+    const PUSH = onAzimuth(SEAT.at, 3.0 - SEAT.at.z, 1.36, 50);
+    const DIO_AT = new THREE.Vector3(dio.x - 0.62, dio.y + 1.4, dio.z + 0.25); // the network's middle (A1–A9) with its big captions
+    const VANTAGE = onAzimuth(DIO_AT, 1.15 - DIO_AT.z, 4.4, 62); // in the conference room, above the table: the whole network
+    const orbit = (shot, deg) => {
+      const p = shot.pos.clone().sub(shot.at).applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(deg));
+      return { pos: p.add(shot.at), at: shot.at, fov: shot.fov };
+    };
+    // The scripted sequence: [seconds, t, focus, shot]. Values ease between keys. The room; the line
+    // systems drop together; transport rides them; the RSP network rises and attaches; then a tour of the
+    // three line systems (focus) while the camera orbits, and back into the room.
+    const SEQ = [
+      [0, 0, 'all', SEAT],
+      [3, 0, 'all', SEAT],
+      [7, 0.15, 'all', PUSH], // spotlight
+      [27, 1, 'all', VANTAGE], // room fades; photonic drops, transport rides, the RSP overlay attaches
+      [31, 1, 'all', orbit(VANTAGE, 9)],
+      [33, 1, '6500', orbit(VANTAGE, 7)], // the tour: 6500, RLS, ELS
+      [38, 1, '6500', orbit(VANTAGE, 3)],
+      [40, 1, 'rls', orbit(VANTAGE, 1)],
+      [45, 1, 'rls', orbit(VANTAGE, -3)],
+      [47, 1, 'els', orbit(VANTAGE, -5)],
+      [52, 1, 'els', orbit(VANTAGE, -9)],
+      [54, 1, 'all', orbit(VANTAGE, -6)],
+      [57, 1, 'all', VANTAGE],
+      [69, 0, 'all', SEAT], // and back into the room
+      [72, 0, 'all', SEAT],
+    ];
+    const SEQ_LEN = SEQ[SEQ.length - 1][0];
+    const ease = (k) => k * k * (3 - 2 * k);
+    function seqAt(sec) {
+      sec = Math.min(Math.max(sec, 0), SEQ_LEN);
+      let i = 0; while (i < SEQ.length - 2 && sec > SEQ[i + 1][0]) i++;
+      const [a, ta, fa, A] = SEQ[i], [b, tb, fb, B] = SEQ[i + 1];
+      const k = (sec - a) / (b - a), e = ease(k), va = focusVec(fa), vb = focusVec(fb);
+      return {
+        t: ta + (tb - ta) * k, // linear: the engine's phases carry their own easing
+        focus: Object.fromEntries(SYSTEM_KEYS.map((s_) => [s_, va[s_] + (vb[s_] - va[s_]) * e])),
+        pos: A.pos.clone().lerp(B.pos, e), at: A.at.clone().lerp(B.at, e), fov: A.fov + (B.fov - A.fov) * e,
+      };
+    }
+    // The capture camera for a scrubbed t: seat → vantage as the morph runs.
+    function shotForT(t) {
+      const e = ease(Math.min(Math.max((t - 0.12) / 0.8, 0), 1));
+      return { pos: PUSH.pos.clone().lerp(VANTAGE.pos, e), at: PUSH.at.clone().lerp(VANTAGE.at, e), fov: PUSH.fov + (VANTAGE.fov - PUSH.fov) * e };
+    }
+
+    // ---- State ----
+    const state = { t: 0, focus: focusVec(FOCUS0), focusKey: FOCUS0, playDir: 0, cam: 'path', seqStart: null, seqSec: 0, looping: false, pausedSec: 0 };
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true; controls.dampingFactor = 0.08;
+    controls.maxPolarAngle = Math.PI * 0.495;
+    camera.position.copy(SEAT.pos); controls.target.copy(SEAT.at); controls.update();
+
+    const tInput = document.getElementById('t'), tOut = document.getElementById('tval');
+    const playBtn = document.getElementById('play'), camBtn = document.getElementById('cam');
+    const seqBtn = document.getElementById('seq'), recBtn = document.getElementById('rec');
+    const tabs = [...document.querySelectorAll('#tabs button')];
+    tabs.forEach((b) => b.classList.toggle('on', b.dataset.focus === FOCUS0));
+
+    function setFocus(key) {
+      state.focusKey = FOCUS_KEYS.includes(key) ? key : 'all';
+      tabs.forEach((b) => b.classList.toggle('on', b.dataset.focus === state.focusKey));
+    }
+    function setT(t) { state.t = Math.min(Math.max(t, 0), 1); }
+    function setCam(mode) {
+      state.cam = mode;
+      controls.enabled = mode === 'orbit';
+      camBtn.textContent = `Camera: ${mode === 'orbit' ? 'orbit' : 'capture path'}`;
+      camBtn.classList.toggle('on', mode === 'path');
+    }
+    // the one line system in focus, if the focus singles one out
+    const focused = (f) => { const on = SYSTEM_KEYS.filter((k) => f[k] > 0.5); return on.length === 1 ? on[0] : null; };
+    const FOCUS_CAPTION = {
+      '6500': 'The 6500 ring (A2–A4): the WSAi pair and the 6500-D7s ride it; 8192-1 and 8192-2 go in direct',
+      rls: 'The RLS ring (A5–A7): the Waveserver 5 pair rides it; 8110-3, 8112-1 and 8112-2 go in direct',
+      els: 'ELS and RLS-300 (A8–A9): the 5171 / 5164 aggregation goes in direct; the RLS-300 joins the rings',
+    };
+    function caption({ t, focus }) {
+      const one = t > 0.97 && focused(focus);
+      if (one) return FOCUS_CAPTION[one];
+      if (t <= 0.001) return 'The EBC lab, rack layout option 9, seen from the conference room';
+      if (t < 0.15) return '1 · Spotlight the network gear in the racks';
+      if (t < 0.3) return '2 · The room, the racks and the other gear fade away';
+      if (t < 0.46) return '3 · The 6500, RLS and ELS drop together into one photonic layer';
+      if (t < 0.6) return '4 · The Waveservers and 6500-D7s ride their line systems: the transport layer';
+      if (t < 0.9) return '5 · The RSP network rises and attaches straight down: 1310 into the Waveservers, direct into the line systems';
+      return 'One network: RSP over Waveserver over 6500, RLS and ELS';
+    }
+    function viewTitle(focus) {
+      const one = focused(focus);
+      return `EBC network · ${TITLE} · option 9${one ? ` · focus: ${SYSTEMS[one].label}` : ''}`;
+    }
+
+    // ---- One frame ----
+    let stillMode = false; // MORPH.still(): in capture mode too, draw the given t / focus, not the sequence
+    function frame(time, dt) {
+      let shot = null;
+      if (state.seqStart !== null || (CAPTURE && !stillMode)) {
+        const q = seqAt(state.seqSec);
+        state.t = q.t; state.focus = q.focus;
+        shot = q;
+      } else {
+        if (state.playDir) {
+          setT(state.t + state.playDir * dt / 14);
+          if (state.t === 0 || state.t === 1) { state.playDir = 0; playBtn.textContent = '▶ Morph'; }
+        }
+        const target = focusVec(state.focusKey); // the focus eases over ~0.6 s
+        for (const k of SYSTEM_KEYS) { const d = target[k] - state.focus[k]; state.focus[k] += Math.sign(d) * Math.min(Math.abs(d), dt / 0.6); }
+        if (state.cam === 'path') shot = shotForT(state.t);
+      }
+      if (shot) {
+        camera.position.copy(shot.pos); camera.lookAt(shot.at); controls.target.copy(shot.at);
+        if (camera.fov !== shot.fov) { camera.fov = shot.fov; camera.updateProjectionMatrix(); }
+      }
+      else controls.update();
+      morph.update({ t: state.t, focus: state.focus, time });
+      hud.draw(viewTitle(state.focus), caption(state), state.t > 0.84);
+      if (!CAPTURE) {
+        tInput.value = state.t; tOut.textContent = `t ${state.t.toFixed(2)}`;
+        const one = state.seqStart !== null ? (focused(state.focus) || 'all') : state.focusKey;
+        tabs.forEach((b) => b.classList.toggle('on', b.dataset.focus === one));
+      }
+      renderer.render(scene, camera);
+      hud.render();
+    }
+
+    // ---- Sequence + recording ----
+    let recorder = null;
+    // Play the sequence from `from` seconds; `loop` wraps it at its end (its last frame is its first).
+    function startSequence({ loop = false, from = 0 } = {}) {
+      state.seqStart = performance.now() - from * 1000; state.seqSec = from; state.playDir = 0; state.looping = loop;
+      seqBtn.textContent = '❚❚ Pause'; seqBtn.classList.add('on'); controls.enabled = false;
+      playBtn.textContent = '▶ Morph';
+    }
+    // Stop (pause) the sequence where it is; resumeLoop() carries on from there.
+    function stopSequence() {
+      if (state.seqStart === null) return;
+      state.seqStart = null; state.pausedSec = state.seqSec % SEQ_LEN;
+      seqBtn.textContent = '▶ Loop'; seqBtn.classList.remove('on');
+      setCam(state.cam);
+      if (recorder && recorder.state !== 'inactive') recorder.stop();
+    }
+    // Record the sequence (or `seconds` of it) at 1920×1080. Resolves with the webm Blob.
+    function record({ seconds = SEQ_LEN, download = true } = {}) {
+      if (recorder) return Promise.reject(new Error('already recording'));
+      fixedSize = true; fit();
+      const stream = renderer.domElement.captureStream(30);
+      const type = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find((t) => MediaRecorder.isTypeSupported(t));
+      recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 16e6 });
+      const chunks = [];
+      recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+      recBtn.classList.add('on'); recBtn.textContent = '● Recording…';
+      const done = new Promise((resolve) => {
+        recorder.onstop = () => {
+          const blob = new Blob(chunks, { type: 'video/webm' });
+          recorder = null; fixedSize = false; fit();
+          recBtn.classList.remove('on'); recBtn.textContent = '● Record 1080p';
+          if (download) {
+            const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'ebc-morph-1080p.webm' });
+            a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+          }
+          resolve(blob);
+        };
+      });
+      recorder.start(1000);
+      startSequence(); // one pass from the start, no loop
+      recordUntil = seconds;
+      return done;
+    }
+    let recordUntil = SEQ_LEN;
+
+    // ---- Controls ----
+    tInput.addEventListener('input', () => { stopSequence(); state.playDir = 0; setT(+tInput.value); });
+    playBtn.addEventListener('click', () => togglePlay());
+    function togglePlay() {
+      stopSequence();
+      if (state.playDir) { state.playDir = 0; playBtn.textContent = '▶ Morph'; return; }
+      state.playDir = state.t >= 1 ? -1 : 1;
+      playBtn.textContent = '❚❚ Pause';
+    }
+    camBtn.addEventListener('click', () => setCam(state.cam === 'orbit' ? 'path' : 'orbit'));
+    const resumeLoop = () => startSequence({ loop: true, from: state.pausedSec });
+    seqBtn.addEventListener('click', () => (state.seqStart === null ? resumeLoop() : stopSequence()));
+    // a drag or wheel on the scene pauses the loop too (the orbit camera is one C away)
+    for (const ev of ['pointerdown', 'wheel']) renderer.domElement.addEventListener(ev, () => { if (!recorder) stopSequence(); }, { passive: true });
+    recBtn.addEventListener('click', () => { if (!recorder) record(); else stopSequence(); });
+    tabs.forEach((b) => b.addEventListener('click', () => { stopSequence(); setFocus(b.dataset.focus); }));
+    addEventListener('keydown', (e) => {
+      if (e.target instanceof HTMLInputElement && e.key !== ' ') return;
+      const step = e.shiftKey ? 0.1 : 0.02;
+      if (e.key === 'ArrowRight') { stopSequence(); state.playDir = 0; setT(state.t + step); }
+      else if (e.key === 'ArrowLeft') { stopSequence(); state.playDir = 0; setT(state.t - step); }
+      else if (e.key === 'Home') { stopSequence(); setT(0); }
+      else if (e.key === 'End') { stopSequence(); setT(1); }
+      else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+      else if (['1', '2', '3', '4'].includes(e.key)) { stopSequence(); setFocus(FOCUS_KEYS[+e.key - 1]); } // the tabs' order
+      else if (e.key === 'c' || e.key === 'C') setCam(state.cam === 'orbit' ? 'path' : 'orbit');
+      else if (e.key === 'p' || e.key === 'P') state.seqStart === null ? resumeLoop() : stopSequence();
+      else return;
+    });
+
+    // ---- Loop (none in capture mode: MORPH.renderAt draws a frame on demand) ----
+    let prev = performance.now();
+    function loop(now) {
+      requestAnimationFrame(loop);
+      const dt = Math.min((now - prev) / 1000, 0.1); prev = now;
+      if (state.seqStart !== null) {
+        state.seqSec = (now - state.seqStart) / 1000;
+        if (state.looping && !recorder && state.seqSec >= SEQ_LEN) { // wrap: the end frame is the opening frame
+          const laps = Math.floor(state.seqSec / SEQ_LEN);
+          state.seqStart += laps * SEQ_LEN * 1000; state.seqSec -= laps * SEQ_LEN; state.loops = (state.loops || 0) + laps;
+        }
+        if (state.seqSec >= (recorder ? recordUntil : SEQ_LEN)) { state.seqSec = Math.min(state.seqSec, SEQ_LEN); frame(now / 1000, dt); stopSequence(); return; }
+      }
+      frame(now / 1000, dt);
+    }
+    if (!CAPTURE) {
+      setCam('path'); // the capture camera by default
+      if (AUTOPLAY) startSequence({ loop: true });
+      requestAnimationFrame(loop);
+    } else { state.seqSec = 0; frame(0, 0); }
+    document.getElementById('loader').classList.add('hidden');
+
+    // For the console, tests and offline capture.
+    window.MORPH = {
+      THREE, scene, camera, renderer, model, morph, state, SEQ_LEN, seqAt,
+      setT, setFocus, setCam, startSequence, stopSequence, resumeLoop, record, AUTOPLAY,
+      // Render one frame of the scripted sequence at `sec` (capture mode), deterministic.
+      renderAt(sec) { stillMode = false; state.seqSec = sec; frame(sec, 0); },
+      // Render a still at a given t and focus ('all', '6500', 'rls', 'els'; sequence stopped).
+      still({ t, focus = 'all', cam = 'path' }) {
+        stopSequence(); state.playDir = 0; setCam(cam); stillMode = true;
+        setT(t); setFocus(focus); state.focus = focusVec(state.focusKey);
+        frame(performance.now() / 1000, 0);
+      },
+      // Renderer memory counters, for the capture's per-batch log.
+      info() {
+        const { memory, programs } = renderer.info, m = performance.memory;
+        return { geometries: memory.geometries, textures: memory.textures, programs: programs.length,
+          heapMB: m ? Math.round(m.usedJSHeapSize / 1048576) : null };
+      },
+    };
+  </script>
+</body>
+</html>

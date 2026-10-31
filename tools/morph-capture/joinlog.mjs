@@ -1,0 +1,12 @@
+import { serve } from './serve.mjs';
+import { chromium } from 'playwright';
+const [root] = process.argv.slice(2);
+const { url, close } = await serve(root);
+const browser = await chromium.launch({ headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const page = await browser.newPage();
+page.on('console', (m) => { if (/morph|error|warn/i.test(m.type() + m.text())) console.log(m.type(), m.text()); });
+page.on('pageerror', (e) => console.log('pageerror', String(e)));
+await page.goto(`${url}/morph.html?capture`, { waitUntil: 'networkidle' });
+await page.waitForFunction(() => window.MORPH, null, { timeout: 90000 });
+console.log(await page.evaluate(() => JSON.stringify({ layout: MORPH.model.layout, joins: MORPH.model.joins.map((j) => `${j.view}/${j.node.id}=${j.primary}@${j.rack}+${j.helpers.join('+')}`) })));
+await browser.close(); close();

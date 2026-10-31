@@ -55,8 +55,9 @@ Spotlight and Fiber Ring stay on across a switch, so you can watch them move:
 Racks never move; whole sections (devices, signs, placards, fibers, fiber ring) move
 between them. In options 1–3 the RLS / Converged Metro section is on A5–A7, the most
 central three racks (A6 sits ~7.5" right of the conference-table axis).
-The options live in `RACK_LAYOUTS` in `index.html`,
-outside the generated `LAB-RACKS` block, so regenerating the inventory keeps them.
+The options live in `RACK_LAYOUTS` in [`lab-layouts.mjs`](lab-layouts.mjs) (shared by `index.html`
+and `morph.html`, together with the lab data per layout, the zone-sign placement and the sign
+canvases), outside the generated `LAB-RACKS` block, so regenerating the inventory keeps them.
 
 Options 4–6 instead re-place individual devices, from `tools/front-row/options.mjs`: every
 front-row device and zone sign sits at its own rack and U, and the back row (B2–B8) never
@@ -121,6 +122,45 @@ node tools/gen-rack-layout.mjs        # fetches ../lab and reads origin/main
 `LAB_REPO` / `LAB_REF` point it at another checkout or ref, and `--no-fetch` skips the fetch.
 It reads files with `git show`, so the lab checkout's working tree is never used. Needs
 `python3` with PyYAML.
+
+## Room → network morph (`morph.html`)
+
+[`morph.html`](morph.html) starts in the room with the racks in **option 9** (exactly
+`index.html?layout=9`, signs included: both pages lay the racks out with `lab-layouts.mjs`) and
+morphs them into a network view: the equipment moves out of the racks into a standing three-layer
+diorama in front of the rack row (photonic, transport, IP; about 0.15 m per network-view unit).
+Option 9's three bands are the diorama's layers, and each node stands under or over the rack its device
+lives in, so nothing moves sideways. It is **one network**: the 6500 ring (A2–A4), the RLS ring
+(A5–A7) and the ELS with the RLS-300 pair (A8–A9) drop together into one photonic layer; the
+Waveservers ride the line system under their racks (the Waveserver 5 800G link over the RLS, the
+WSAi 400G link over the 6500) with the 6500-D7s (A1) on the 6500; then every RSP router and switch
+of the top band rises into the IP / Ethernet layer and attaches straight down, only to gear in its own
+rack column: a grey **1310** client into the Waveserver below it, or a **direct** pluggable into the
+line system below it (orange 6500, green RLS, yellow ELS; the legend says so). The tabs at the top are
+focus filters (**All**, **6500**, **RLS**, **ELS**; keys 1–4, `?focus=rls`) that bring one line system
+and what rides on it forward.
+
+- It opens on **Camera: capture path** with the sequence **playing on a loop** (room → network →
+  room → …; the last frame is the first, so the loop has no seam). Any interaction (slider, keys,
+  tabs, a drag or wheel on the scene, the Morph button) pauses it where it is; the **Loop** button (or
+  P) resumes it from there. `morph.html?autoplay=0` opens paused (for development); `?capture` never
+  autoplays.
+- One value `t` (0 = room, 1 = network) drives the whole morph and is evaluated every frame, so it
+  scrubs and reverses: slider, ← / → (shift for bigger steps), Home / End, space to play.
+  1–4 set the focus (All / 6500 / RLS / ELS, the tabs' order).
+- **Camera: capture path** rides a scripted camera (a conference-room seat, then a dolly over the
+  glass, on one azimuth; the default); **Loop** plays the full 72 s script (spotlight → the line systems drop →
+  transport → the RSP overlay attaches → a tour of the 6500, RLS and ELS in focus → back to the room);
+  **Record 1080p** records one pass of that sequence at 1920×1080 to a `.webm` (MediaRecorder).
+- `morph.html?capture` renders a fixed 1920×1080 frame on demand with `MORPH.renderAt(seconds)`,
+  for frame-exact offline capture; `tools/morph-capture/` has the batch-safe headless capture.
+- `morph/model.mjs` holds the option-9 racks (`index.html`'s generated `LAB-RACKS` block laid out by
+  `lab-layouts.mjs`, so a re-bake or a layout change reaches it) and the network: names, layer, type,
+  placement and links only, from the CAL network views (line systems, Waveserver 5, 6500-D7,
+  8192 / 8110 / 8112 / 8114), the lab's LAB_RACKS fibres, and inferred links for the rest of the RSP gear
+  (patched per reservation, so it has no fixed links); every link carries its
+  source (`cal`, `lab` or `inferred`). Missing joins are logged to the console. `morph/engine.mjs` is
+  renderer-agnostic (meshes and sprite labels, no CSS2D), so a WebXR page can reuse it.
 
 ## Customising
 

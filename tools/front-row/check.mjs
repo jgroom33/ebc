@@ -9,7 +9,7 @@
 //   - every unit (ring node, RLS-300 node, 6500-D7 + FMT) has all its parts, in order top to
 //     bottom, contiguous in one rack, and each node has its name sign in the U just below it.
 // It also reports, per ring, where the 5 nodes are and whether they sit in ring order, and checks
-// that SECTION_LAYOUTS matches the section re-orders kept verbatim in index.html's RACK_LAYOUTS,
+// that SECTION_LAYOUTS matches the section re-orders kept verbatim in lab-layouts.mjs's RACK_LAYOUTS,
 // and that OPTIONS lines up with the 3D scene's ‹ / › bar (same names, same order).
 // Exits non-zero on any failure.
 //
@@ -139,16 +139,17 @@ if (process.argv.includes('--selftest')) {
 
 let failed = 0;
 
-// index.html's RACK_LAYOUTS section entries must be SECTION_LAYOUTS, and the bar = OPTIONS order.
+// RACK_LAYOUTS' section entries (lab-layouts.mjs, shared by index.html and morph.html) must be
+// SECTION_LAYOUTS, and the bar = OPTIONS order.
 {
-  const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../../lab-layouts.mjs', import.meta.url), 'utf8');
   const m = html.match(/const RACK_LAYOUTS = \[([\s\S]*?)\.\.\.FRONT_ROW_OPTIONS/);
   const errs = [];
-  if (!m) errs.push('RACK_LAYOUTS (section entries, then ...FRONT_ROW_OPTIONS) not found in index.html');
+  if (!m) errs.push('RACK_LAYOUTS (section entries, then ...FRONT_ROW_OPTIONS) not found in lab-layouts.mjs');
   else {
     const inline = (0, eval)(`[${m[1].replace(/\/\/.*$/gm, '')}]`);
     if (JSON.stringify(inline) !== JSON.stringify(SECTION_LAYOUTS))
-      errs.push('index.html RACK_LAYOUTS section entries differ from SECTION_LAYOUTS in options.mjs');
+      errs.push('lab-layouts.mjs RACK_LAYOUTS section entries differ from SECTION_LAYOUTS in options.mjs');
     const bar = [...inline.map(l => l.name), ...OPTIONS.filter(o => !o.blocks).map(o => o.name)];
     OPTIONS.forEach((o, i) => { if (o.name !== bar[i]) errs.push(`bar entry ${i} is '${bar[i]}', OPTIONS[${i}] is '${o.name}'`); });
   }
