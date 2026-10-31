@@ -42,3 +42,7 @@ reports the view it starts on, the highlighted tab and the sequence's start / en
 and identical zone / ring-node sign rectangles. `index-baseline.mjs <root> <outdir>` dumps
 index.html's lab data and built lab (every object) for each layout, to diff before / after a change
 to `lab-layouts.mjs`. `joinlog.mjs <root>` prints the morph's CAL-node → device joins.
+
+`autoplay-check.mjs <root> [loops]` checks the opening autoplay: capture camera, the sequence looping
+(Chrome RSS and renderer.info per 12 s over the loops), pause on each interaction, resume with Loop / P,
+`?autoplay=0` and `?capture` paused, and a recording as one pass.

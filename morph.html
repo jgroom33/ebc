@@ -82,7 +82,7 @@
   </nav>
   <a id="back-link" class="ui" href="./?layout=9">‹ Room (option 9)</a>
 
-  <div id="keys" class="ui">← / → scrub · space play · 1–4 focus · C camera · P sequence</div>
+  <div id="keys" class="ui">← / → scrub · space play · 1–4 focus · C camera · P loop</div>
   <div id="bar" class="ui">
     <button id="play" title="Play / pause the morph (space)">▶ Morph</button>
     <label class="scrub">room
@@ -90,7 +90,7 @@
       network <output id="tval">t 0.00</output>
     </label>
     <button id="cam" title="Orbit with the mouse, or ride the capture camera (C)">Camera: orbit</button>
-    <button id="seq" title="Play the scripted capture sequence (P)">▶ Sequence</button>
+    <button id="seq" title="Play the scripted sequence on a loop, or pause it (P)">▶ Loop</button>
     <button id="rec" class="rec" title="Record the sequence at 1920×1080 to a .webm">● Record 1080p</button>
   </div>
 
@@ -102,6 +102,7 @@
        URL: ?capture  — fixed 1920×1080 canvas, no UI, frames rendered on demand
                         by MORPH.renderAt(seconds) (for offline video capture).
             ?focus=6500 | rls | els — open with one line system in focus (default: all).
+            ?autoplay=0 — open paused (by default the sequence plays on a loop with the capture camera).
        ====================================================================== -->
   <script type="module">
     import * as THREE from 'three';
@@ -112,6 +113,9 @@
 
     const params = new URLSearchParams(location.search);
     const CAPTURE = params.has('capture');
+    // Opening (not ?capture): the capture camera, and the scripted sequence playing on a loop; any
+    // interaction pauses it, the Loop button (or P) resumes it where it paused. ?autoplay=0 opens paused.
+    const AUTOPLAY = !CAPTURE && params.get('autoplay') !== '0';
     // Focus: one network view; a filter brings one line system (and what rides on it) forward.
     const FOCUS_KEYS = ['all', ...SYSTEM_KEYS];
     const FOCUS0 = FOCUS_KEYS.includes(params.get('focus')) ? params.get('focus') : 'all';
@@ -261,7 +265,7 @@
     }
 
     // ---- State ----
-    const state = { t: 0, focus: focusVec(FOCUS0), focusKey: FOCUS0, playDir: 0, cam: 'orbit', seqStart: null, seqSec: 0 };
+    const state = { t: 0, focus: focusVec(FOCUS0), focusKey: FOCUS0, playDir: 0, cam: 'path', seqStart: null, seqSec: 0, looping: false, pausedSec: 0 };
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.dampingFactor = 0.08;
     controls.maxPolarAngle = Math.PI * 0.495;
@@ -342,14 +346,17 @@
 
     // ---- Sequence + recording ----
     let recorder = null;
-    function startSequence() {
-      state.seqStart = performance.now(); state.seqSec = 0; state.playDir = 0;
-      seqBtn.textContent = '■ Stop'; seqBtn.classList.add('on'); controls.enabled = false;
+    // Play the sequence from `from` seconds; `loop` wraps it at its end (its last frame is its first).
+    function startSequence({ loop = false, from = 0 } = {}) {
+      state.seqStart = performance.now() - from * 1000; state.seqSec = from; state.playDir = 0; state.looping = loop;
+      seqBtn.textContent = '❚❚ Pause'; seqBtn.classList.add('on'); controls.enabled = false;
+      playBtn.textContent = '▶ Morph';
     }
+    // Stop (pause) the sequence where it is; resumeLoop() carries on from there.
     function stopSequence() {
       if (state.seqStart === null) return;
-      state.seqStart = null;
-      seqBtn.textContent = '▶ Sequence'; seqBtn.classList.remove('on');
+      state.seqStart = null; state.pausedSec = state.seqSec % SEQ_LEN;
+      seqBtn.textContent = '▶ Loop'; seqBtn.classList.remove('on');
       setCam(state.cam);
       if (recorder && recorder.state !== 'inactive') recorder.stop();
     }
@@ -376,7 +383,7 @@
         };
       });
       recorder.start(1000);
-      startSequence();
+      startSequence(); // one pass from the start, no loop
       recordUntil = seconds;
       return done;
     }
@@ -392,7 +399,10 @@
       playBtn.textContent = '❚❚ Pause';
     }
     camBtn.addEventListener('click', () => setCam(state.cam === 'orbit' ? 'path' : 'orbit'));
-    seqBtn.addEventListener('click', () => (state.seqStart === null ? startSequence() : stopSequence()));
+    const resumeLoop = () => startSequence({ loop: true, from: state.pausedSec });
+    seqBtn.addEventListener('click', () => (state.seqStart === null ? resumeLoop() : stopSequence()));
+    // a drag or wheel on the scene pauses the loop too (the orbit camera is one C away)
+    for (const ev of ['pointerdown', 'wheel']) renderer.domElement.addEventListener(ev, () => { if (!recorder) stopSequence(); }, { passive: true });
     recBtn.addEventListener('click', () => { if (!recorder) record(); else stopSequence(); });
     tabs.forEach((b) => b.addEventListener('click', () => { stopSequence(); setFocus(b.dataset.focus); }));
     addEventListener('keydown', (e) => {
@@ -405,7 +415,7 @@
       else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
       else if (['1', '2', '3', '4'].includes(e.key)) { stopSequence(); setFocus(FOCUS_KEYS[+e.key - 1]); } // the tabs' order
       else if (e.key === 'c' || e.key === 'C') setCam(state.cam === 'orbit' ? 'path' : 'orbit');
-      else if (e.key === 'p' || e.key === 'P') state.seqStart === null ? startSequence() : stopSequence();
+      else if (e.key === 'p' || e.key === 'P') state.seqStart === null ? resumeLoop() : stopSequence();
       else return;
     });
 
@@ -416,18 +426,25 @@
       const dt = Math.min((now - prev) / 1000, 0.1); prev = now;
       if (state.seqStart !== null) {
         state.seqSec = (now - state.seqStart) / 1000;
+        if (state.looping && !recorder && state.seqSec >= SEQ_LEN) { // wrap: the end frame is the opening frame
+          const laps = Math.floor(state.seqSec / SEQ_LEN);
+          state.seqStart += laps * SEQ_LEN * 1000; state.seqSec -= laps * SEQ_LEN; state.loops = (state.loops || 0) + laps;
+        }
         if (state.seqSec >= (recorder ? recordUntil : SEQ_LEN)) { state.seqSec = Math.min(state.seqSec, SEQ_LEN); frame(now / 1000, dt); stopSequence(); return; }
       }
       frame(now / 1000, dt);
     }
-    if (!CAPTURE) requestAnimationFrame(loop);
-    else { state.seqSec = 0; frame(0, 0); }
+    if (!CAPTURE) {
+      setCam('path'); // the capture camera by default
+      if (AUTOPLAY) startSequence({ loop: true });
+      requestAnimationFrame(loop);
+    } else { state.seqSec = 0; frame(0, 0); }
     document.getElementById('loader').classList.add('hidden');
 
     // For the console, tests and offline capture.
     window.MORPH = {
       THREE, scene, camera, renderer, model, morph, state, SEQ_LEN, seqAt,
-      setT, setFocus, setCam, startSequence, stopSequence, record,
+      setT, setFocus, setCam, startSequence, stopSequence, resumeLoop, record, AUTOPLAY,
       // Render one frame of the scripted sequence at `sec` (capture mode), deterministic.
       renderAt(sec) { stillMode = false; state.seqSec = sec; frame(sec, 0); },
       // Render a still at a given t and focus ('all', '6500', 'rls', 'els'; sequence stopped).

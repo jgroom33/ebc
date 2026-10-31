@@ -140,13 +140,18 @@ line system below it (orange 6500, green RLS, yellow ELS; the legend says so). T
 focus filters (**All**, **6500**, **RLS**, **ELS**; keys 1–4, `?focus=rls`) that bring one line system
 and what rides on it forward.
 
+- It opens on **Camera: capture path** with the sequence **playing on a loop** (room → network →
+  room → …; the last frame is the first, so the loop has no seam). Any interaction (slider, keys,
+  tabs, a drag or wheel on the scene, the Morph button) pauses it where it is; the **Loop** button (or
+  P) resumes it from there. `morph.html?autoplay=0` opens paused (for development); `?capture` never
+  autoplays.
 - One value `t` (0 = room, 1 = network) drives the whole morph and is evaluated every frame, so it
   scrubs and reverses: slider, ← / → (shift for bigger steps), Home / End, space to play.
   1–4 set the focus (All / 6500 / RLS / ELS, the tabs' order).
 - **Camera: capture path** rides a scripted camera (a conference-room seat, then a dolly over the
-  glass, on one azimuth); **Sequence** plays the full 72 s script (spotlight → the line systems drop →
+  glass, on one azimuth; the default); **Loop** plays the full 72 s script (spotlight → the line systems drop →
   transport → the RSP overlay attaches → a tour of the 6500, RLS and ELS in focus → back to the room);
-  **Record 1080p** records that sequence at 1920×1080 to a `.webm` (MediaRecorder).
+  **Record 1080p** records one pass of that sequence at 1920×1080 to a `.webm` (MediaRecorder).
 - `morph.html?capture` renders a fixed 1920×1080 frame on demand with `MORPH.renderAt(seconds)`,
   for frame-exact offline capture; `tools/morph-capture/` has the batch-safe headless capture.
 - `morph/model.mjs` holds the option-9 racks (`index.html`'s generated `LAB-RACKS` block laid out by
