@@ -277,7 +277,6 @@ export function createMorph(model, { log = console } = {}) {
     frame: S_({ color: 0x2a2e33, roughness: 0.4, metalness: 0.85 }),
     tableTop: S_({ color: 0x2a1c12, roughness: 0.45, metalness: 0.05 }),
     tableBase: S_({ color: 0x1e1e21, roughness: 0.5, metalness: 0.7 }),
-    chair: S_({ color: 0x2d3037, roughness: 0.7, metalness: 0.2 }),
     brand: S_({ color: 0x0056b4, roughness: 0.5, emissive: 0x0056b4, emissiveIntensity: 0.15 }),
     lens: S_({ color: 0xfff6e6, emissive: 0xfff6e6, emissiveIntensity: 1.3, roughness: 0.6 }),
     glass: ch.shell.add(new THREE.MeshStandardMaterial({ color: 0xcfe3ea, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.14 })),
@@ -309,21 +308,11 @@ export function createMorph(model, { log = console } = {}) {
       shell.add(at(box(w, H - fd, fd, m.infill), sx * (L / 2 - w / 2), H / 2, z));
     }
   }
-  // table, chairs, ceiling lights
+  // table (no chairs on this page: the morph plays from a seat at the table), ceiling lights
   const cz = D / 2, topY = ROOM.tableHeight - IN;
   shell.add(at(box(ROOM.tableLength, 2 * IN, ROOM.tableWidth, m.tableTop), 0, topY, cz));
   shell.add(at(box(ROOM.tableLength * 0.5, 0.4 * IN, 3 * IN, m.brand), 0, topY + IN, cz));
   for (const sx of [-1, 1]) shell.add(at(box(2 * IN, ROOM.tableHeight - 2 * IN, ROOM.tableWidth * 0.55, m.tableBase), sx * ROOM.tableLength * 0.28, (ROOM.tableHeight - 2 * IN) / 2, cz));
-  const chair = new THREE.Group();
-  chair.add(at(box(0.5, 0.12, 0.5, m.chair), 0, 0.46, 0), at(box(0.5, 0.52, 0.08, m.chair), 0, 0.76, -0.16));
-  chair.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 12), m.tableBase), 0, 0.25, 0));
-  chair.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.3, 0.05, 24), m.tableBase), 0, 0.026, 0));
-  const span = ROOM.tableLength * 0.92, gap = ROOM.tableWidth / 2 + 0.32;
-  for (let i = 0; i < 9; i++) {
-    const x = -span / 2 + (span / 8) * i;
-    const f = chair.clone(); f.position.set(x, 0, cz - gap); shell.add(f);
-    const b = chair.clone(); b.position.set(x, 0, cz + gap); b.rotation.y = Math.PI; shell.add(b);
-  }
   for (let c = 0; c < 8; c++) {
     const x = -L / 2 + L * 0.12 + (L * 0.76) * (c / 7);
     for (const z of [D * 0.18, D * 0.82]) shell.add(at(box(2 * FT, IN, 2 * FT, m.lens), x, H - IN, z));
