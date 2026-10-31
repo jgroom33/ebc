@@ -1,0 +1,11 @@
+{
+  "name": "ebc-morph-capture",
+  "private": true,
+  "type": "module",
+  "description": "Headless capture of morph.html: batch-safe 1080p frames, stills, a memory probe and an index.html console check.",
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "ffprobe-static": "^3.1.0",
+    "playwright": "1.62.1"
+  }
+}
