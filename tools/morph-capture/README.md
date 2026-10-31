@@ -31,3 +31,7 @@ Chrome RSS is summed over the process tree with `pstree -pT` (threads excluded):
 `rotation-probe.mjs <root> <outdir>` prints the camera's yaw / pitch / roll across the 2D-to-3D
 segment (Sequence, and scrub with the capture camera, both views) and saves frames of it; yaw
 should stay constant until the scripted orbit at 25 s.
+
+`travel-probe.mjs <root>` prints, per CAL node and view, the rack slot it flies from, the node it
+lands on and the dx / dy / dz between them (optical nodes should be a near-vertical drop).
+`scrubframes.mjs <root> <outdir> <view> <t>...` saves stills of one view at given t values.

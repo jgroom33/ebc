@@ -12,10 +12,14 @@
 export const LAYOUT_1 = { name: 'Option 1 · Optical core', blocks: [[1], [7, 8, 9], [2, 3, 4], [5, 6], [10]] };
 
 // ---- CAL subset ---------------------------------------------------------------------------
-export const LAYERS = {
-  ip: { size: [12, 9] },
-  tr: { size: [10, 9] },
-  ph: { size: [15, 12] },
+// Node x follows the rack the device lives in, so each one drops (almost) straight down into the
+// network view: R is one rack pitch (27 in) in CAL units at the engine's S = 0.15 m per unit, and x is
+// measured from the A4 / A5 midline (A2 = -2.5 R … A7 = +2.5 R). z is ring depth, in front of the racks.
+export const R = (27 * 0.0254) / 0.15;
+export const LAYERS = { // size [w, d] and centre [x, z], CAL units
+  ip: { size: [3 * R, 8], center: [1.5 * R, 0], caption: 'right' }, // the routers live in A5–A7
+  tr: { size: [3 * R, 6], center: [-1.5 * R, 0] }, // the Waveservers in A2 and A4
+  ph: { size: [6.5 * R, 9], center: [0, 0] }, // the 6500 ring under A2–A4, the RLS ring under A5–A7
 };
 export const LAYER_ORDER = ['ph', 'tr', 'ip']; // bottom to top
 export const SPREAD = 6; // CAL units between stacked layers
@@ -36,37 +40,41 @@ export const VIEW_KEYS = Object.keys(VIEWS);
 const BOTH = ['ws6500', 'wsrls'];
 
 export const NODES = [
-  { id: 'W1', name: '8192-1', layer: 'ip', type: 'router', pos: [-2, -3.6], views: BOTH },
-  { id: 'W2', name: '8110-1', layer: 'ip', type: 'router', pos: [2, -3.6], views: BOTH },
-  { id: 'W3', name: '8192-2', layer: 'ip', type: 'router', pos: [-4.6, 2.9], views: BOTH },
-  { id: 'W4', name: '8110-2', layer: 'ip', type: 'router', pos: [-0.8, 2.9], views: BOTH },
-  { id: 'WSW', name: 'Waveserver 5 West', layer: 'tr', type: 'xpdr', pos: [0, -3.6], views: BOTH },
-  { id: 'WSE', name: 'Waveserver 5 East', layer: 'tr', type: 'xpdr', pos: [-2.7, 2.9], views: BOTH },
-  { id: 'Canyon', name: 'Canyon', layer: 'ph', type: 'roadm', pos: [0, -4.6], views: ['ws6500'] },
-  { id: 'Wind', name: 'Wind', layer: 'ph', type: 'amp', pos: [4.4, -1.4], views: ['ws6500'] },
-  { id: 'Peak', name: 'Peak', layer: 'ph', type: 'roadm', pos: [2.7, 3.7], views: ['ws6500'] },
-  { id: 'Mountain', name: 'Mountain', layer: 'ph', type: 'roadm', pos: [-2.7, 3.7], views: ['ws6500'] },
-  { id: 'Breeze', name: 'Breeze', layer: 'ph', type: 'amp', pos: [-4.4, -1.4], views: ['ws6500'] },
-  { id: 'Americas', name: 'Americas', layer: 'ph', type: 'roadm', pos: [0, -4.6], views: ['wsrls'] },
-  { id: 'Atlantic', name: 'Atlantic', layer: 'ph', type: 'amp', pos: [4.4, -1.4], views: ['wsrls'] },
-  { id: 'Europe', name: 'Europe', layer: 'ph', type: 'roadm', pos: [2.7, 3.7], views: ['wsrls'] },
-  { id: 'Asia', name: 'Asia', layer: 'ph', type: 'roadm', pos: [-2.7, 3.7], views: ['wsrls'] },
-  { id: 'Pacific', name: 'Pacific', layer: 'ph', type: 'amp', pos: [-4.4, -1.4], views: ['wsrls'] },
+  // IP: 8192-1 in A5, 8110-1 and 8192-2 in A6, 8110-2 in A7
+  { id: 'W1', name: '8192-1', layer: 'ip', type: 'router', pos: [0.5 * R, -2.5], views: BOTH },
+  { id: 'W2', name: '8110-1', layer: 'ip', type: 'router', pos: [1.5 * R, -2.5], views: BOTH },
+  { id: 'W3', name: '8192-2', layer: 'ip', type: 'router', pos: [1.5 * R, 2.5], views: BOTH },
+  { id: 'W4', name: '8110-2', layer: 'ip', type: 'router', pos: [2.5 * R, 2.5], views: BOTH },
+  // Transport: West in A2, East in A4
+  { id: 'WSW', name: 'Waveserver 5 West', layer: 'tr', type: 'xpdr', pos: [-2.5 * R, 0], views: BOTH },
+  { id: 'WSE', name: 'Waveserver 5 East', layer: 'tr', type: 'xpdr', pos: [-0.5 * R, 0], views: BOTH },
+  // 6500 ring: Canyon in A2 (the ring's apex), Wind and Breeze in A3, Peak and Mountain in A4
+  { id: 'Canyon', name: 'Canyon', layer: 'ph', type: 'roadm', pos: [-2.5 * R, 0], views: ['ws6500'] },
+  { id: 'Wind', name: 'Wind', layer: 'ph', type: 'amp', pos: [-1.5 * R, -2.4], views: ['ws6500'] },
+  { id: 'Peak', name: 'Peak', layer: 'ph', type: 'roadm', pos: [-0.5 * R, -2.4], views: ['ws6500'] },
+  { id: 'Mountain', name: 'Mountain', layer: 'ph', type: 'roadm', pos: [-0.5 * R, 2.4], views: ['ws6500'] },
+  { id: 'Breeze', name: 'Breeze', layer: 'ph', type: 'amp', pos: [-1.5 * R, 2.4], views: ['ws6500'] },
+  // RLS ring: Americas and Pacific in A5, Atlantic in A6 (the apex), Europe and Asia in A7
+  { id: 'Americas', name: 'Americas', layer: 'ph', type: 'roadm', pos: [0.5 * R, -1.4], views: ['wsrls'] },
+  { id: 'Atlantic', name: 'Atlantic', layer: 'ph', type: 'amp', pos: [1.5 * R, -3.4], views: ['wsrls'] },
+  { id: 'Europe', name: 'Europe', layer: 'ph', type: 'roadm', pos: [2.5 * R, -1.4], views: ['wsrls'] },
+  { id: 'Asia', name: 'Asia', layer: 'ph', type: 'roadm', pos: [2.5 * R, 2.4], views: ['wsrls'] },
+  { id: 'Pacific', name: 'Pacific', layer: 'ph', type: 'amp', pos: [0.5 * R, 2.4], views: ['wsrls'] },
 ];
 
 // Line systems: node order is the fibre order; a ring closes on its first node.
 export const PH_SYSTEMS = [
-  { name: '6500 ring', nodes: ['Canyon', 'Wind', 'Peak', 'Mountain', 'Breeze'], ring: true, label: [0, 5.6], views: ['ws6500'] },
-  { name: 'RLS ring', nodes: ['Americas', 'Atlantic', 'Europe', 'Asia', 'Pacific'], ring: true, label: [0, 5.6], views: ['wsrls'] },
+  { name: '6500 ring', nodes: ['Canyon', 'Wind', 'Peak', 'Mountain', 'Breeze'], ring: true, label: [-1.0 * R, 4.3], views: ['ws6500'] },
+  { name: 'RLS ring', nodes: ['Americas', 'Atlantic', 'Europe', 'Asia', 'Pacific'], ring: true, label: [1.7 * R, 4.3], views: ['wsrls'] },
 ];
 
 const PUR = 0x8b5cf6, BLU = 0x2d93ff;
 export const GREY = 0x9aa1ab;
 // Wavelengths: `band` is the height on the span ribbon (0 bottom, 1 top), `at` where the rate label sits.
 export const WAVES = {
-  ws16c: { rate: '1.6T', band: 0.75, color: PUR, path: ['Canyon', 'Breeze', 'Mountain'], views: ['ws6500'], at: 0.14 },
+  ws16c: { rate: '1.6T', band: 0.75, color: PUR, path: ['Canyon', 'Breeze', 'Mountain'], views: ['ws6500'], at: 0.3 },
   ws8c: { rate: '800G', band: 0.55, color: BLU, path: ['Canyon', 'Wind', 'Peak', 'Mountain'], views: ['ws6500'], at: 0.5 },
-  ws16r: { rate: '1.6T', band: 0.75, color: PUR, path: ['Americas', 'Pacific', 'Asia'], views: ['wsrls'], at: 0.14 },
+  ws16r: { rate: '1.6T', band: 0.75, color: PUR, path: ['Americas', 'Pacific', 'Asia'], views: ['wsrls'], at: 0.3 },
   ws8r: { rate: '800G', band: 0.55, color: BLU, path: ['Americas', 'Atlantic', 'Europe', 'Asia'], views: ['wsrls'], at: 0.5 },
 };
 

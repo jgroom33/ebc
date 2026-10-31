@@ -30,9 +30,9 @@ const xOfOrder = (o) => X_RIGHT - PITCH * (10 - o);
 // ---- The diorama frame: CAL units → room metres ----------------------------------------------
 export const S = 0.15; // metres per CAL unit
 const DIORAMA = new THREE.Vector3(
-  (xOfOrder(4) + xOfOrder(5)) / 2, // centred on A4 / A5 (A2–A7 hold both views' gear)
-  0.8, // photonic layer height; IP lands ~1.8 m above it
-  FRONT_Z + RACK_D / 2 + 1.05, // the 12-unit-deep photonic slab ends just in front of the rack faces
+  (xOfOrder(4) + xOfOrder(5)) / 2, // the A4 / A5 midline: node x is measured from it, in rack pitches (model R)
+  0.3, // photonic layer height, below every optical shelf so each one drops into place; IP lands 1.8 m above
+  FRONT_Z + RACK_D / 2 + 0.72, // the deepest ring node (z -3.4 units) sits just in front of the rack faces
 );
 const nodeBase = (n) => new THREE.Vector3(DIORAMA.x + n.pos[0] * S, DIORAMA.y + layerY(n.layer) * S, DIORAMA.z + n.pos[1] * S);
 
@@ -433,9 +433,9 @@ export function createMorph(model, { log = console } = {}) {
   // ---- Layer slabs and captions ----
   const slabs = {};
   for (const k of LAYER_ORDER) {
-    const [w, d] = LAYERS[k].size;
+    const [w, d] = LAYERS[k].size, [cx, cz] = LAYERS[k].center;
     const g = new THREE.Group();
-    g.position.set(DIORAMA.x, DIORAMA.y + layerY(k) * S - 0.03, DIORAMA.z);
+    g.position.set(DIORAMA.x + cx * S, DIORAMA.y + layerY(k) * S - 0.03, DIORAMA.z + cz * S);
     const mat = fader(new THREE.MeshStandardMaterial({ color: 0xe8edf3, roughness: 0.85, transparent: true, opacity: 0.16 }), 0.16);
     mat.userData.noDepth = true;
     const slab = new THREE.Mesh(new THREE.BoxGeometry(w * S, 0.22 * S, d * S), mat); slab.renderOrder = -1;
@@ -445,8 +445,9 @@ export function createMorph(model, { log = console } = {}) {
     net.add(g);
     const captions = Object.fromEntries(Object.entries(VIEWS).map(([v, V]) => {
       const sp = textSprite(V.layers[k], 0.07, { bg: 'rgba(10,14,20,0.6)', fg: '#cfe0f1', weight: 600 });
-      sp.center.set(1, 0); // just outside the slab's front-left corner, clear of every node and label
-      sp.position.set(DIORAMA.x - (w / 2) * S - 0.08, g.position.y + 0.02, DIORAMA.z + (d / 2) * S);
+      const right = LAYERS[k].caption === 'right'; // just outside the slab's front-left (or -right) corner
+      sp.center.set(right ? 0 : 1, 0);
+      sp.position.set(g.position.x + (right ? 1 : -1) * ((w / 2) * S + 0.08), g.position.y + 0.02, g.position.z + (d / 2) * S);
       net.add(sp);
       return [v, sp];
     }));
@@ -599,8 +600,10 @@ export function createMorph(model, { log = console } = {}) {
       const node = nodes[pick.node], e = easeInOut(k);
       const target = vec.copy(node.base).setY(node.base.y + node.height / 2);
       f.pos.lerpVectors(f.from, target, e);
-      f.pos.y += Math.sin(Math.PI * e) * 0.35; // an arc up and over
-      f.pos.z += Math.sin(Math.PI * e) * 0.15;
+      // an arc up and over, only for a flight that goes somewhere sideways; a drop stays a drop
+      const arc = clamp01((Math.hypot(target.x - f.from.x, target.z - f.from.z) - 0.5) / 0.8);
+      f.pos.y += Math.sin(Math.PI * e) * 0.35 * arc;
+      f.pos.z += Math.sin(Math.PI * e) * 0.15 * arc;
       f.k = k;
       // body: a rack panel that shrinks toward the node's size, then crossfades into the node mesh
       const sx = lerp(f.size.x, node.width * 0.9, e), sy = lerp(f.size.y, node.height * 0.9, e), sz = lerp(f.size.z, node.width * 0.9, e);
