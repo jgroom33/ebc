@@ -718,11 +718,11 @@
       // from `base` (Option 1) and re-places devices on top of it. Bottom of the racks photonic,
       // the layer above it transport, packet on top as in Option 1. See moveLabData for the keys.
       { id: 9, base: 1, name: 'Option 9 · Photonic on the bottom',
-        desc: 'D7 · 6500 · RLS-300 · RLS · ELS',
+        desc: 'D7 · 6500 · RLS-300 over ELS · RLS',
         // Lower (photonic) sections only — devices topping out below U30; packet stays put.
-        // The 6500 stays on A2–A4 as in Option 1.
+        // The 6500 stays on A2–A4 as in Option 1; RLS moves two racks right.
         shift: [
-          { racks: ['A5', 'A6', 'A7', 'A8', 'A9'], by: 1, belowRU: 30, zones: ['RLS', 'ELS'] }, // RLS → A6–A8, ELS → A9–A10
+          { racks: ['A5', 'A6', 'A7'], by: 2, belowRU: 30, zones: ['RLS'] },     // RLS → A7–A9
         ],
         moves: [
           // TDM leaves the front row: an empty back-row rack, same U as in A1.
@@ -732,17 +732,27 @@
           // the photonic nodes, so their sign shares the lower-sign band (U27–U34).
           { name: '6500-D7-2-FMT', rack: 'A1', ru: 11 }, { name: '6500-D7-2', rack: 'A1', ru: 12 },
           { name: '6500-D7-1-FMT', rack: 'A1', ru: 19 }, { name: '6500-D7-1', rack: 'A1', ru: 20 },
-          // RLS-300 pair collapsed into A5, between the 6500 and the RLS: Downtown over Uptown
-          // (as in today's plan), each with its node sign below it, tops at U26.
-          { name: 'Uptown-FMT', rack: 'A5', ru: 20 }, { name: 'Uptown', rack: 'A5', ru: 21 },
-          { name: 'Downtown-FMT', rack: 'A5', ru: 24 }, { name: 'Downtown', rack: 'A5', ru: 25 },
+          // RLS-300 pair on A5–A6, one node per rack, tops at U26 like the other photonic nodes
+          // (node sign U23, FMT U24, R2-300 U25–U26).
+          { name: 'Uptown-FMT', rack: 'A5', ru: 24 }, { name: 'Uptown', rack: 'A5', ru: 25 },
+          { name: 'Downtown-FMT', rack: 'A6', ru: 24 }, { name: 'Downtown', rack: 'A6', ru: 25 },
+          // ELS under the RLS-300 nodes, ELS-x-1 in A5 and ELS-x-2 in A6, same order and 1U gaps
+          // as before (terminal, OADM, terminal, OADM), packed down to U5–U13 so the ELS sign
+          // fits U14–U22 between them and the RLS-300 node signs.
+          { name: 'ELS-2-T-1', rack: 'A5', ru: 5 }, { name: 'ELS-2-O-1', rack: 'A5', ru: 8 },
+          { name: 'ELS-1-T-1', rack: 'A5', ru: 10 }, { name: 'ELS-1-O-1', rack: 'A5', ru: 13 },
+          { name: 'ELS-2-T-2', rack: 'A6', ru: 5 }, { name: 'ELS-2-O-2', rack: 'A6', ru: 8 },
+          { name: 'ELS-1-T-2', rack: 'A6', ru: 10 }, { name: 'ELS-1-O-2', rack: 'A6', ru: 13 },
         ],
-        dropZones: ['TDM', 'DCOM', 'Outdoor'],
+        dropZones: ['TDM', 'DCOM', 'Outdoor', 'ELS'],
         addZones: [
           { rackStart: 'A1', rackEnd: 'A1', label: '6500 Services', ru: 28, h: 3 },
-          { rackStart: 'A5', rackEnd: 'A5', label: 'RLS-300', ru: 28, h: 3 },
+          { rackStart: 'A5', rackEnd: 'A6', label: 'RLS-300', ru: 28, h: 3 },
+          { rackStart: 'A5', rackEnd: 'A6', label: 'ELS', ru: 14, h: 3 },
         ],
-        alignAlso: ['6500 Services', 'RLS-300'] },     // signed in the shared lower band
+        // Signs that share the lower band (U27–U34); ELS is left out, so its sign sits in its own
+        // gap above the ELS gear.
+        alignedZones: ['6500', 'RLS', '6500 Services', 'RLS-300'] },
     ];
     // ?layout=N picks the entry whose `id` is N (an entry's id defaults to its bar position).
     const layoutId = (i) => RACK_LAYOUTS[i].id ?? i;
@@ -816,7 +826,8 @@
     //           the named zones move with it;
     //   moves:  [{ name, rack, ru }] — one device to any rack (front or back) and U; wins over shift;
     //   dropZones / addZones — zone signs removed / added;
-    //   alignAlso — extra zone labels that join the shared 6500/ELS/RLS/TDM sign band.
+    //   alignedZones — the zone labels that share one lower sign band, in place of the default
+    //                  6500 / ELS / RLS / TDM.
     // A ring-node sign follows the device just above it (its node's bottom part). Fibers and
     // rings are keyed by device name, so they follow on their own.
     function moveLabData(base, L) {
@@ -854,7 +865,7 @@
           used.set(u, d.name);
         }
       }
-      return { ...base, racks, zones, nodeSigns, alignAlso: L.alignAlso };
+      return { ...base, racks, zones, nodeSigns, alignedZones: L.alignedZones };
     }
 
     // Layouts 0–3 re-order sections; every layout takes its ring-node signs from options.mjs
@@ -1177,7 +1188,7 @@
       };
       // The 6500/ELS/RLS lower-section signs share ONE aligned band — the clear gap
       // common to their racks, capped by the tightest section (RLS, under the 8192s).
-      const ALIGNED = new Set(['6500', 'ELS', 'RLS', 'TDM', ...(labData.alignAlso || [])]);
+      const ALIGNED = new Set(labData.alignedZones || ['6500', 'ELS', 'RLS', 'TDM']);
       const lowerZones = labData.alignLower === false ? [] : labData.zones.filter(z => ALIGNED.has(z.label));
       let alignedBand = null;
       if (lowerZones.length) {
