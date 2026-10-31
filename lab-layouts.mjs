@@ -59,12 +59,14 @@ export function createLabLayouts(LAB_RACKS) {
       // Three bands across A2–A9, as in the morph's layers. TOP = IP: Converged Metro and
       // Aggregation as one 'Metro & Aggregation' block, U42 up (sign U49+). Each Converged
       // Metro group (one 8192 with its gear) spans two adjacent racks over the 6500 / RLS;
-      // Aggregation stays over the ELS (A8–A9). MIDDLE = transport: the Waveservers at U35–U36
-      // (just above the photonic signs), West over the 6500 in A2 and East in A4 as before,
-      // under one 'Datacenter Interconnect and Waveserver' sign (U37–U41).
+      // Aggregation stays over the ELS (A8–A9). MIDDLE = transport: the Waveserver / WSAi links
+      // at U35 (just above the photonic signs), one over the 6500 and one over the RLS, under
+      // one 'Datacenter Interconnect and Waveserver' sign (U36–U41).
       stacks: [                                     // bottom-up from `ru`, no gaps
-        { rack: 'A2', ru: 35, names: ['WS-2P', 'Waveserver-5-West-1'] },
-        { rack: 'A4', ru: 35, names: ['WS-1P', 'Waveserver-5-East-1'] },
+        // A pair is a fibered link: WSAi WS-2P ↔ WS-1P (400G) stays over the 6500 (A2, A4); the
+        // Waveserver 5 West ↔ East (800G) moves over the RLS, its ends in A5 and A7 the same way.
+        { rack: 'A2', ru: 35, names: ['WS-2P'] }, { rack: 'A4', ru: 35, names: ['WS-1P'] },
+        { rack: 'A5', ru: 35, names: ['Waveserver-5-West-1'] }, { rack: 'A7', ru: 35, names: ['Waveserver-5-East-1'] },
         { rack: 'A2', ru: 42, names: ['8192-1', '8114-1', '8114-2'] },
         { rack: 'A3', ru: 42, names: ['5166-1', '5170-4', '5170-3', '5170-2', '5170-1'] },
         { rack: 'A4', ru: 42, names: ['8192-2', '8110-1'] },
@@ -77,7 +79,7 @@ export function createLabLayouts(LAB_RACKS) {
       dropZones: ['TDM', 'DCOM', 'Outdoor', 'ELS', 'Converged Metro', 'Aggregation', 'Datacenter Interconnect'],
       addZones: [
         { rackStart: 'A2', rackEnd: 'A9', label: 'Metro & Aggregation', ru: 49, h: 3, keepAspect: true },
-        { rackStart: 'A2', rackEnd: 'A9', label: 'Datacenter Interconnect and Waveserver', ru: 37, h: 3, keepAspect: true },
+        { rackStart: 'A2', rackEnd: 'A9', label: 'Datacenter Interconnect and Waveserver', ru: 36, h: 3, keepAspect: true },
         { rackStart: 'A1', rackEnd: 'A1', label: '6500 Services', ru: 28, h: 3 },
         { rackStart: 'A8', rackEnd: 'A9', label: 'RLS-300', ru: 28, h: 3 },
         { rackStart: 'A8', rackEnd: 'A9', label: 'ELS', ru: 14, h: 3 },

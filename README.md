@@ -75,8 +75,10 @@ the morph: IP on top, transport in the middle, photonic at the bottom.
 - Bottom (photonic, U1–U26, signs in one band at U27–U34): 6500 on A2–A4 and RLS on A5–A7 as in
   Option 1; Uptown (A8) and Downtown (A9) at U23–U26 under **RLS-300**, with the ELS shelves
   below them (U5–U13) under an **ELS** sign at U14–U22.
-- Middle (transport): the Waveserver 5 / WSAi pairs at U35–U36, West over the 6500 in A2 and
-  East in A4, under one **Datacenter Interconnect and Waveserver** sign across A2–A9 (U37–U41).
+- Middle (transport), U35: the two fibered links, ends spread over their line system like the
+  terminals: WSAi WS-2P ↔ WS-1P (400G) over the 6500 in A2 / A4, Waveserver 5 West ↔ East
+  (800G) over the RLS in A5 / A7; one **Datacenter Interconnect and Waveserver** sign across
+  A2–A9 (U36–U41).
 - Top (IP, U42 up): all Converged Metro and Aggregation gear under one **Metro & Aggregation**
   sign across A2–A9 (U49+). Each Converged Metro group (an 8192 with its gear) spans two
   adjacent racks over the 6500 / RLS (A2–A3, A4–A5, A6–A7); Aggregation stays over the ELS.
