@@ -718,12 +718,9 @@
       // from `base` (Option 1) and re-places devices on top of it. Bottom of the racks photonic,
       // the layer above it transport, packet on top as in Option 1. See moveLabData for the keys.
       { id: 9, base: 1, name: 'Option 9 · Photonic on the bottom',
-        desc: 'D7 · 6500 · RLS-300 over ELS · RLS',
+        desc: 'D7 · 6500 · RLS · RLS-300 over ELS',
         // Lower (photonic) sections only — devices topping out below U30; packet stays put.
-        // The 6500 stays on A2–A4 as in Option 1; RLS moves two racks right.
-        shift: [
-          { racks: ['A5', 'A6', 'A7'], by: 2, belowRU: 30, zones: ['RLS'] },     // RLS → A7–A9
-        ],
+        // The 6500 (A2–A4) and the RLS (A5–A7) stay where Option 1 has them: no shift.
         moves: [
           // TDM leaves the front row: an empty back-row rack, same U as in A1.
           { name: '3926-TDM-2', rack: 'B4', ru: 19 }, { name: '3926-TDM-1', rack: 'B4', ru: 20 },
@@ -732,23 +729,23 @@
           // the photonic nodes, so their sign shares the lower-sign band (U27–U34).
           { name: '6500-D7-2-FMT', rack: 'A1', ru: 11 }, { name: '6500-D7-2', rack: 'A1', ru: 12 },
           { name: '6500-D7-1-FMT', rack: 'A1', ru: 19 }, { name: '6500-D7-1', rack: 'A1', ru: 20 },
-          // RLS-300 pair on A5–A6, one node per rack, tops at U26 like the other photonic nodes
+          // RLS-300 pair on A8–A9, one node per rack, tops at U26 like the other photonic nodes
           // (node sign U23, FMT U24, R2-300 U25–U26).
-          { name: 'Uptown-FMT', rack: 'A5', ru: 24 }, { name: 'Uptown', rack: 'A5', ru: 25 },
-          { name: 'Downtown-FMT', rack: 'A6', ru: 24 }, { name: 'Downtown', rack: 'A6', ru: 25 },
-          // ELS under the RLS-300 nodes, ELS-x-1 in A5 and ELS-x-2 in A6, same order and 1U gaps
+          { name: 'Uptown-FMT', rack: 'A8', ru: 24 }, { name: 'Uptown', rack: 'A8', ru: 25 },
+          { name: 'Downtown-FMT', rack: 'A9', ru: 24 }, { name: 'Downtown', rack: 'A9', ru: 25 },
+          // ELS under the RLS-300 nodes, ELS-x-1 in A8 and ELS-x-2 in A9, same order and 1U gaps
           // as before (terminal, OADM, terminal, OADM), packed down to U5–U13 so the ELS sign
           // fits U14–U22 between them and the RLS-300 node signs.
-          { name: 'ELS-2-T-1', rack: 'A5', ru: 5 }, { name: 'ELS-2-O-1', rack: 'A5', ru: 8 },
-          { name: 'ELS-1-T-1', rack: 'A5', ru: 10 }, { name: 'ELS-1-O-1', rack: 'A5', ru: 13 },
-          { name: 'ELS-2-T-2', rack: 'A6', ru: 5 }, { name: 'ELS-2-O-2', rack: 'A6', ru: 8 },
-          { name: 'ELS-1-T-2', rack: 'A6', ru: 10 }, { name: 'ELS-1-O-2', rack: 'A6', ru: 13 },
+          { name: 'ELS-2-T-1', rack: 'A8', ru: 5 }, { name: 'ELS-2-O-1', rack: 'A8', ru: 8 },
+          { name: 'ELS-1-T-1', rack: 'A8', ru: 10 }, { name: 'ELS-1-O-1', rack: 'A8', ru: 13 },
+          { name: 'ELS-2-T-2', rack: 'A9', ru: 5 }, { name: 'ELS-2-O-2', rack: 'A9', ru: 8 },
+          { name: 'ELS-1-T-2', rack: 'A9', ru: 10 }, { name: 'ELS-1-O-2', rack: 'A9', ru: 13 },
         ],
         dropZones: ['TDM', 'DCOM', 'Outdoor', 'ELS'],
         addZones: [
           { rackStart: 'A1', rackEnd: 'A1', label: '6500 Services', ru: 28, h: 3 },
-          { rackStart: 'A5', rackEnd: 'A6', label: 'RLS-300', ru: 28, h: 3 },
-          { rackStart: 'A5', rackEnd: 'A6', label: 'ELS', ru: 14, h: 3 },
+          { rackStart: 'A8', rackEnd: 'A9', label: 'RLS-300', ru: 28, h: 3 },
+          { rackStart: 'A8', rackEnd: 'A9', label: 'ELS', ru: 14, h: 3 },
         ],
         // Signs that share the lower band (U27–U34); ELS is left out, so its sign sits in its own
         // gap above the ELS gear.
