@@ -50,7 +50,7 @@ Spotlight and Fiber Ring stay on across a switch, so you can watch them move:
 | Option 4, Access to Core | Access → TDM → Aggregation → Converged Metro → DCI across the top; ELS over 6500 over RLS below | `?layout=4` |
 | Option 5, Photonic in the Center | Route/switch · RLS over 6500 photonic · Waveserver/WSAi over 6500-D7 · DCOM/Outdoor | `?layout=5` |
 | Option 6, Portfolio Vertical Slices | One rack each: Access+TDM · Aggregation · Converged Metro · ELS · 6500 photonic · 6500 services · RLS · Waveserver · DCOM/Outdoor | `?layout=6` |
-| Option 9, Photonic on the bottom | Option 1 with the photonic (lower) sections moved: 6500 on A1–A3 · RLS-300 + 6500 Services on A5–A6 · RLS on A6–A8 · ELS on A9–A10; TDM to the back row (B4); no DCOM / Outdoor | `?layout=9` |
+| Option 9, Photonic on the bottom | Option 1 with devices re-placed: 6500 Services (A1, under Access) · 6500 (A2–A4) · RLS-300 (A5) · RLS (A6–A8) · ELS (A9–A10); TDM to the back row (B4); no DCOM / Outdoor | `?layout=9` |
 
 Racks never move; whole sections (devices, signs, placards, fibers, fiber ring) move
 between them. In options 1–3 the RLS / Converged Metro section is on A5–A7, the most
@@ -71,14 +71,14 @@ Option 9 (the 8th dot on the bar; its `id: 9` keeps the URL number) starts from 
 (`base: 1`) and re-places devices on top of it, packet on top, transport (the 6500-D7
 services shelves) in the middle, photonic at the bottom:
 
-- `shift` moves the lower sections only (devices topping out under U30) one rack left (6500,
-  A2–A4 → A1–A3) or right (RLS A5–A7 → A6–A8, ELS A8–A9 → A9–A10), with their zone signs;
-  the packet gear on top stays where Option 1 has it.
+- `shift` moves the lower sections only (devices topping out under U30) one rack right with
+  their zone signs: RLS A5–A7 → A6–A8, ELS A8–A9 → A9–A10. The 6500 stays on A2–A4 and the
+  packet gear on top stays where Option 1 has it.
 - `moves` places single devices: the 4 TDM shelves go to the empty back-row rack B4 (same U),
-  Uptown to A5 and Downtown to A6 (U1–U4, node sign at U1), and both 6500-D7 services shelves
-  with their FMTs to A5 (U8–U23).
-- `dropZones` removes the TDM, DCOM and Outdoor signs; `addZones` adds **RLS-300** (A5–A6)
-  and **6500 Services** (A5).
+  both 6500-D7 services shelves with their FMTs to A1 under Access (U11–U26), and the RLS-300
+  pair to A5 (Uptown U19–U22, Downtown U23–U26, each with its node sign).
+- `dropZones` removes the TDM, DCOM and Outdoor signs; `addZones` adds **6500 Services** (A1)
+  and **RLS-300** (A5), and `alignAlso` puts both in the shared lower-sign band (U27–U34).
 
 Ring-node signs follow the device just above them; fibers and rings follow by device name.
 `moveLabData` in `index.html` logs a console error if a move puts gear outside a rack or on
