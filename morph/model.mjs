@@ -1,0 +1,158 @@
+// The shared model behind morph.html (and later the WebXR page): the EBC lab racks in front-row
+// layout 1, a minimal copy of two CAL network views (ws6500, wsrls), and the join between them.
+// No three.js here, so the desktop and headset pages can both use it.
+//
+// Racks: LAB_RACKS is read from index.html's generated LAB-RACKS block (so a re-bake of the
+// inventory reaches this page too), then re-ordered to layout 1 the same way index.html's
+// remapLabRacks does.
+// Network: only {id, name, layer, type, pos}, links, wavelength paths and layer sizes / heights,
+// hand-copied from the CAL network view. Positions are CAL units on each layer's plane, [x, z].
+
+// Layout 1, "Optical core": TDM · 6500 · RLS · ELS · Outdoor (index.html RACK_LAYOUTS[1]).
+export const LAYOUT_1 = { name: 'Option 1 · Optical core', blocks: [[1], [7, 8, 9], [2, 3, 4], [5, 6], [10]] };
+
+// ---- CAL subset ---------------------------------------------------------------------------
+export const LAYERS = {
+  ip: { size: [12, 9] },
+  tr: { size: [10, 9] },
+  ph: { size: [15, 12] },
+};
+export const LAYER_ORDER = ['ph', 'tr', 'ip']; // bottom to top
+export const SPREAD = 6; // CAL units between stacked layers
+export const layerY = (k) => LAYER_ORDER.indexOf(k) * SPREAD;
+export const RIBBON = { h: 1.2, y0: 0.08 }; // a span's spectrum ribbon: height, bottom edge
+
+export const VIEWS = {
+  ws6500: {
+    title: 'Routed core + Waveserver + 6500',
+    layers: { ip: 'IP / Ethernet layer', tr: 'Transport layer – Waveserver 5', ph: 'Photonic – 6500 ring' },
+  },
+  wsrls: {
+    title: 'Routed core + Waveserver + RLS',
+    layers: { ip: 'IP / Ethernet layer', tr: 'Transport layer – Waveserver 5', ph: 'Photonic – RLS ring' },
+  },
+};
+export const VIEW_KEYS = Object.keys(VIEWS);
+const BOTH = ['ws6500', 'wsrls'];
+
+export const NODES = [
+  { id: 'W1', name: '8192-1', layer: 'ip', type: 'router', pos: [-2, -3.6], views: BOTH },
+  { id: 'W2', name: '8110-1', layer: 'ip', type: 'router', pos: [2, -3.6], views: BOTH },
+  { id: 'W3', name: '8192-2', layer: 'ip', type: 'router', pos: [-4.6, 2.9], views: BOTH },
+  { id: 'W4', name: '8110-2', layer: 'ip', type: 'router', pos: [-0.8, 2.9], views: BOTH },
+  { id: 'WSW', name: 'Waveserver 5 West', layer: 'tr', type: 'xpdr', pos: [0, -3.6], views: BOTH },
+  { id: 'WSE', name: 'Waveserver 5 East', layer: 'tr', type: 'xpdr', pos: [-2.7, 2.9], views: BOTH },
+  { id: 'Canyon', name: 'Canyon', layer: 'ph', type: 'roadm', pos: [0, -4.6], views: ['ws6500'] },
+  { id: 'Wind', name: 'Wind', layer: 'ph', type: 'amp', pos: [4.4, -1.4], views: ['ws6500'] },
+  { id: 'Peak', name: 'Peak', layer: 'ph', type: 'roadm', pos: [2.7, 3.7], views: ['ws6500'] },
+  { id: 'Mountain', name: 'Mountain', layer: 'ph', type: 'roadm', pos: [-2.7, 3.7], views: ['ws6500'] },
+  { id: 'Breeze', name: 'Breeze', layer: 'ph', type: 'amp', pos: [-4.4, -1.4], views: ['ws6500'] },
+  { id: 'Americas', name: 'Americas', layer: 'ph', type: 'roadm', pos: [0, -4.6], views: ['wsrls'] },
+  { id: 'Atlantic', name: 'Atlantic', layer: 'ph', type: 'amp', pos: [4.4, -1.4], views: ['wsrls'] },
+  { id: 'Europe', name: 'Europe', layer: 'ph', type: 'roadm', pos: [2.7, 3.7], views: ['wsrls'] },
+  { id: 'Asia', name: 'Asia', layer: 'ph', type: 'roadm', pos: [-2.7, 3.7], views: ['wsrls'] },
+  { id: 'Pacific', name: 'Pacific', layer: 'ph', type: 'amp', pos: [-4.4, -1.4], views: ['wsrls'] },
+];
+
+// Line systems: node order is the fibre order; a ring closes on its first node.
+export const PH_SYSTEMS = [
+  { name: '6500 ring', nodes: ['Canyon', 'Wind', 'Peak', 'Mountain', 'Breeze'], ring: true, label: [0, 5.6], views: ['ws6500'] },
+  { name: 'RLS ring', nodes: ['Americas', 'Atlantic', 'Europe', 'Asia', 'Pacific'], ring: true, label: [0, 5.6], views: ['wsrls'] },
+];
+
+const PUR = 0x8b5cf6, BLU = 0x2d93ff;
+export const GREY = 0x9aa1ab;
+// Wavelengths: `band` is the height on the span ribbon (0 bottom, 1 top), `at` where the rate label sits.
+export const WAVES = {
+  ws16c: { rate: '1.6T', band: 0.75, color: PUR, path: ['Canyon', 'Breeze', 'Mountain'], views: ['ws6500'] },
+  ws8c: { rate: '800G', band: 0.55, color: BLU, path: ['Canyon', 'Wind', 'Peak', 'Mountain'], views: ['ws6500'], at: 0.5 },
+  ws16r: { rate: '1.6T', band: 0.75, color: PUR, path: ['Americas', 'Pacific', 'Asia'], views: ['wsrls'] },
+  ws8r: { rate: '800G', band: 0.55, color: BLU, path: ['Americas', 'Atlantic', 'Europe', 'Asia'], views: ['wsrls'], at: 0.5 },
+};
+
+// IP adjacencies, carried by a wavelength in each view (dashed in its colour).
+export const IP_LINKS = [
+  ['W1', 'W3', { wsrls: 'ws16r', ws6500: 'ws16c' }],
+  ['W2', 'W4', { wsrls: 'ws8r', ws6500: 'ws8c' }],
+];
+// Cross-layer handoffs: [from, to, views, optic ('grey' or a wavelength), offset [dx, dz]].
+export const DROPS = [
+  ['W1', 'WSW', BOTH, 'grey'],
+  ['W2', 'WSW', BOTH, 'grey'],
+  ['W3', 'WSE', BOTH, 'grey'],
+  ['W4', 'WSE', BOTH, 'grey'],
+  ['WSW', 'Americas', ['wsrls'], 'ws16r', [-0.3, 0]],
+  ['WSW', 'Americas', ['wsrls'], 'ws8r', [0.3, 0]],
+  ['WSE', 'Asia', ['wsrls'], 'ws16r', [-0.3, 0]],
+  ['WSE', 'Asia', ['wsrls'], 'ws8r', [0.3, 0]],
+  ['WSW', 'Canyon', ['ws6500'], 'ws16c', [-0.3, 0]],
+  ['WSW', 'Canyon', ['ws6500'], 'ws8c', [0.3, 0]],
+  ['WSE', 'Mountain', ['ws6500'], 'ws16c', [-0.3, 0]],
+  ['WSE', 'Mountain', ['ws6500'], 'ws8c', [0.3, 0]],
+];
+// Transport adjacencies: [a, b, views, wavelength, sideways offset]; dashed, the light is on the ring.
+export const TR_LINKS = [
+  ['WSW', 'WSE', ['wsrls'], 'ws16r', -0.3],
+  ['WSW', 'WSE', ['wsrls'], 'ws8r', 0.3],
+  ['WSW', 'WSE', ['ws6500'], 'ws16c', -0.3],
+  ['WSW', 'WSE', ['ws6500'], 'ws8c', 0.3],
+];
+
+// ---- Join ---------------------------------------------------------------------------------
+// A CAL node is joined to EBC devices by (view, name): the device with the node's name (or its
+// alias), plus the node's helper shelves, which fly with it and merge into it: `<name>-FMT` and
+// the OMC fibre chassis `<first 3 letters>-OMC-n` (AME-OMC-1 is Americas').
+export const ALIASES = {
+  'Waveserver 5 West': 'Waveserver-5-West-1',
+  'Waveserver 5 East': 'Waveserver-5-East-1',
+};
+
+// index.html's LAB_RACKS, re-ordered to `layout` (old display order → new), as remapLabRacks does.
+export function remapLabRacks(labRacks, layout = LAYOUT_1) {
+  const newOf = new Map();
+  layout.blocks.flat().forEach((o, i) => newOf.set(o, i + 1));
+  const mapId = (id) => (id[0] === 'A' && newOf.has(+id.slice(1))) ? 'A' + newOf.get(+id.slice(1)) : id;
+  const racks = {};
+  for (const [id, rk] of Object.entries(labRacks.racks))
+    racks[mapId(id)] = rk.row === 'front' ? { ...rk, order: newOf.get(rk.order) ?? rk.order } : rk;
+  const zones = labRacks.zones.map((z) => {
+    const a = +mapId(z.rackStart).slice(1), b = +mapId(z.rackEnd).slice(1);
+    return { ...z, rackStart: 'A' + Math.min(a, b), rackEnd: 'A' + Math.max(a, b) };
+  });
+  return { racks, zones, fibers: labRacks.fibers, rings: labRacks.rings };
+}
+
+// Pull LAB_RACKS out of index.html's generated block (between the LAB-RACKS markers).
+export function parseLabRacks(indexHtml) {
+  const a = indexHtml.indexOf('/* LAB-RACKS-START */'), b = indexHtml.indexOf('/* LAB-RACKS-END */');
+  if (a < 0 || b < a) throw new Error('morph: no LAB-RACKS block in index.html');
+  return new Function(`${indexHtml.slice(a, b)}\nreturn LAB_RACKS;`)();
+}
+
+export function joinViews(lab, { log = console } = {}) {
+  const rackOf = new Map(); // device name -> { rack, device }
+  for (const [id, rk] of Object.entries(lab.racks))
+    for (const d of rk.devices) rackOf.set(d.name, { rack: id, device: d });
+  const joins = []; // { view, node, primary, helpers[] }
+  const missing = [];
+  for (const view of VIEW_KEYS) {
+    for (const node of NODES.filter((n) => n.views.includes(view))) {
+      const primary = ALIASES[node.name] || node.name;
+      if (!rackOf.has(primary)) { missing.push({ view, id: node.id, name: node.name }); continue; }
+      const omc = `${node.name.slice(0, 3).toUpperCase()}-OMC-`;
+      const helpers = [...rackOf.keys()].filter((n) => n === `${primary}-FMT` || (node.layer === 'ph' && n.startsWith(omc)));
+      joins.push({ view, node, primary, helpers, rack: rackOf.get(primary).rack });
+    }
+    const got = joins.filter((j) => j.view === view);
+    log.info?.(`[morph] ${view}: ${got.length}/${NODES.filter((n) => n.views.includes(view)).length} CAL nodes joined to ` +
+      `${got.reduce((s, j) => s + 1 + j.helpers.length, 0)} EBC devices in ${[...new Set(got.map((j) => j.rack))].sort().join(', ')}`);
+  }
+  for (const m of missing) log.warn?.(`[morph] no EBC device for CAL node ${m.view}/${m.id} "${m.name}"`);
+  return { joins, missing, rackOf };
+}
+
+// Everything the morph needs, from index.html's text.
+export function buildModel(indexHtml, opts) {
+  const lab = remapLabRacks(parseLabRacks(indexHtml), LAYOUT_1);
+  return { lab, ...joinViews(lab, opts) };
+}

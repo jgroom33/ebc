@@ -96,6 +96,29 @@ node tools/gen-rack-layout.mjs        # fetches ../lab and reads origin/main
 It reads files with `git show`, so the lab checkout's working tree is never used. Needs
 `python3` with PyYAML.
 
+## Room → network morph (`morph.html`)
+
+[`morph.html`](morph.html) starts in the room with the **layout 1** racks and morphs them into a
+network view: the equipment flies out of the racks into a standing three-layer diorama in front of
+the rack row (photonic, transport, IP; about 0.15 m per network-view unit). Two views, switched by the
+tabs at the top: **ws6500** (routed core + Waveserver 5 + the 6500 ring, racks A2–A4) and **wsrls**
+(the same routers and Waveservers over the RLS ring, racks A5–A7). Switching sends one ring home to
+its racks and flies the other up.
+
+- One value `t` (0 = room, 1 = network) drives the whole morph and is evaluated every frame, so it
+  scrubs and reverses: slider, ← / → (shift for bigger steps), Home / End, space to play.
+  1 / 2 switch the view.
+- **Camera: capture path** rides a scripted camera (a conference-room seat, then a dolly through the
+  glass); **Sequence** plays the full ~62 s script (spotlight → morph → ring swap → back to the
+  room); **Record 1080p** records that sequence at 1920×1080 to a `.webm` (MediaRecorder).
+- `morph.html?capture` renders a fixed 1920×1080 frame on demand with `MORPH.renderAt(seconds)`,
+  for frame-exact offline capture.
+- `morph/model.mjs` holds the layout-1 racks (read from this page's generated `LAB-RACKS` block, so a
+  re-bake reaches it) and a minimal copy of the two network views (node name, layer, type and position;
+  links; wavelength paths; layer sizes), joined by (view, device name) plus a small alias table.
+  Missing joins are logged to the console. `morph/engine.mjs` is renderer-agnostic (meshes and
+  sprite labels, no CSS2D), so a WebXR page can reuse it.
+
 ## Customising
 
 Everything is parametric. Open `index.html` and edit the `CONFIG` block near the top
