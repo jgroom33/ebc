@@ -714,7 +714,67 @@
       // sign at its own rack and U. Its OPTIONS list all 7 entries in bar order (the 4 above
       // are its SECTION_LAYOUTS, which tools/front-row/check.mjs keeps equal to these).
       ...FRONT_ROW_OPTIONS.filter(o => !o.blocks),
+      // Option 9 (?layout=9; `id` keeps the URL number apart from its place on the bar): starts
+      // from `base` (Option 1) and re-places devices on top of it. Bottom of the racks photonic,
+      // the layer above it transport, packet on top as in Option 1. See moveLabData for the keys.
+      { id: 9, base: 1, name: 'Option 9 · Photonic on the bottom',
+        desc: 'IP · Transport · Photonic bands',
+        // Lower (photonic) sections only — devices topping out below U30; packet stays put.
+        // The 6500 (A2–A4) and the RLS (A5–A7) stay where Option 1 has them: no shift.
+        moves: [
+          // TDM leaves the front row: an empty back-row rack, same U as in A1.
+          { name: '3926-TDM-2', rack: 'B4', ru: 19 }, { name: '3926-TDM-1', rack: 'B4', ru: 20 },
+          { name: '3926-Combo-2', rack: 'B4', ru: 21 }, { name: '3926-Combo-1', rack: 'B4', ru: 22 },
+          // 6500-D7 services shelves (+ FMTs) to A1, under Access, where TDM was: tops at U26 like
+          // the photonic nodes, so their sign shares the lower-sign band (U27–U34).
+          { name: '6500-D7-2-FMT', rack: 'A1', ru: 11 }, { name: '6500-D7-2', rack: 'A1', ru: 12 },
+          { name: '6500-D7-1-FMT', rack: 'A1', ru: 19 }, { name: '6500-D7-1', rack: 'A1', ru: 20 },
+          // RLS-300 pair on A8–A9, one node per rack, tops at U26 like the other photonic nodes
+          // (node sign U23, FMT U24, R2-300 U25–U26).
+          { name: 'Uptown-FMT', rack: 'A8', ru: 24 }, { name: 'Uptown', rack: 'A8', ru: 25 },
+          { name: 'Downtown-FMT', rack: 'A9', ru: 24 }, { name: 'Downtown', rack: 'A9', ru: 25 },
+          // ELS under the RLS-300 nodes, ELS-x-1 in A8 and ELS-x-2 in A9, same order and 1U gaps
+          // as before (terminal, OADM, terminal, OADM), packed down to U5–U13 so the ELS sign
+          // fits U14–U22 between them and the RLS-300 node signs.
+          { name: 'ELS-2-T-1', rack: 'A8', ru: 5 }, { name: 'ELS-2-O-1', rack: 'A8', ru: 8 },
+          { name: 'ELS-1-T-1', rack: 'A8', ru: 10 }, { name: 'ELS-1-O-1', rack: 'A8', ru: 13 },
+          { name: 'ELS-2-T-2', rack: 'A9', ru: 5 }, { name: 'ELS-2-O-2', rack: 'A9', ru: 8 },
+          { name: 'ELS-1-T-2', rack: 'A9', ru: 10 }, { name: 'ELS-1-O-2', rack: 'A9', ru: 13 },
+        ],
+        // Three bands across A2–A9, as in the morph's layers. TOP = IP: Converged Metro and
+        // Aggregation as one 'Metro & Aggregation' block, U42 up (sign U49+). Each Converged
+        // Metro group (one 8192 with its gear) spans two adjacent racks over the 6500 / RLS;
+        // Aggregation stays over the ELS (A8–A9). MIDDLE = transport: the Waveserver / WSAi links
+        // at U35 (just above the photonic signs), one over the 6500 and one over the RLS, under
+        // one 'Datacenter Interconnect and Waveserver' sign (U36–U41).
+        stacks: [                                     // bottom-up from `ru`, no gaps
+          // A pair is a fibered link: WSAi WS-2P ↔ WS-1P (400G) stays over the 6500 (A2, A4); the
+          // Waveserver 5 West ↔ East (800G) moves over the RLS, its ends in A5 and A7 the same way.
+          { rack: 'A2', ru: 35, names: ['WS-2P'] }, { rack: 'A4', ru: 35, names: ['WS-1P'] },
+          { rack: 'A5', ru: 35, names: ['Waveserver-5-West-1'] }, { rack: 'A7', ru: 35, names: ['Waveserver-5-East-1'] },
+          { rack: 'A2', ru: 42, names: ['8192-1', '8114-1', '8114-2'] },
+          { rack: 'A3', ru: 42, names: ['5166-1', '5170-4', '5170-3', '5170-2', '5170-1'] },
+          { rack: 'A4', ru: 42, names: ['8192-2', '8110-1'] },
+          { rack: 'A5', ru: 42, names: ['8110-3', '5166-2'] },
+          { rack: 'A6', ru: 42, names: ['8192-3', '8110-4'] },
+          { rack: 'A7', ru: 42, names: ['8112-2', '8112-1', '8110-2'] },
+          { rack: 'A8', ru: 42, names: ['5130-1', '5171-1', '5164-5', '5164-6', '5164-7', '5164-8'] },
+          { rack: 'A9', ru: 42, names: ['5130-2', '5171-2', '5164-1', '5164-2', '5164-3', '5164-4'] },
+        ],
+        dropZones: ['TDM', 'DCOM', 'Outdoor', 'ELS', 'Converged Metro', 'Aggregation', 'Datacenter Interconnect'],
+        addZones: [
+          { rackStart: 'A2', rackEnd: 'A9', label: 'Metro & Aggregation', ru: 49, h: 3, keepAspect: true },
+          { rackStart: 'A2', rackEnd: 'A9', label: 'Datacenter Interconnect and Waveserver', ru: 36, h: 3, keepAspect: true },
+          { rackStart: 'A1', rackEnd: 'A1', label: '6500 Services', ru: 28, h: 3 },
+          { rackStart: 'A8', rackEnd: 'A9', label: 'RLS-300', ru: 28, h: 3 },
+          { rackStart: 'A8', rackEnd: 'A9', label: 'ELS', ru: 14, h: 3 },
+        ],
+        // Signs that share the lower band (U27–U34); ELS is left out, so its sign sits in its own
+        // gap above the ELS gear.
+        alignedZones: ['6500', 'RLS', '6500 Services', 'RLS-300'] },
     ];
+    // ?layout=N picks the entry whose `id` is N (an entry's id defaults to its bar position).
+    const layoutId = (i) => RACK_LAYOUTS[i].id ?? i;
     // A copy of LAB_RACKS with the front row re-ordered per `layout` (old order → new order).
     function remapLabRacks(layout) {
       const newOf = new Map();
@@ -779,15 +839,73 @@
       // section-reorder layouts; here each zone sign sits in its own clear gap.
       return { racks, zones, fibers: LAB_RACKS.fibers, rings: LAB_RACKS.rings, placards: [], nodeSigns, alignLower: false };
     }
+    // A layout with `base` (Option 9) is that layout's lab data with devices re-placed:
+    //   shift:  [{ racks, by, belowRU, zones }] — every device in `racks` whose top U is under
+    //           belowRU moves `by` racks (all rules read the base, so chains don't cascade), and
+    //           the named zones move with it;
+    //   moves:  [{ name, rack, ru }] — one device to any rack (front or back) and U; wins over shift;
+    //   stacks: [{ rack, ru, names }] — devices stacked bottom-up from `ru` with no gaps (moves);
+    //   dropZones / addZones — zone signs removed / added;
+    //   alignedZones — the zone labels that share one lower sign band, in place of the default
+    //                  6500 / ELS / RLS / TDM.
+    // A ring-node sign follows the device just above it (its node's bottom part). Fibers and
+    // rings are keyed by device name, so they follow on their own.
+    function moveLabData(base, L) {
+      const hOf = new Map(Object.values(base.racks).flatMap(rk => rk.devices.map(d => [d.name, d.h])));
+      const moveOf = new Map((L.moves || []).map(m => [m.name, m]));
+      for (const st of L.stacks || []) {
+        let ru = st.ru;
+        for (const name of st.names) {
+          if (!hOf.has(name)) console.error(`layout ${L.name}: no device '${name}' to stack`);
+          moveOf.set(name, { name, rack: st.rack, ru }); ru += hOf.get(name) ?? 1;
+        }
+      }
+      const shiftRack = (id, d) => {
+        const s = (L.shift || []).find(s => s.racks.includes(id) && d.ru + d.h - 1 < s.belowRU);
+        return s ? 'A' + (+id.slice(1) + s.by) : id;
+      };
+      const racks = {}, slot = new Map();          // slot: 'rack:U' in base -> new { rack, ru }
+      for (const [id, rk] of Object.entries(base.racks)) racks[id] = { ...rk, devices: [] };
+      for (const [id, rk] of Object.entries(base.racks)) for (const d of rk.devices) {
+        const m = moveOf.get(d.name), to = m ? { rack: m.rack, ru: m.ru } : { rack: shiftRack(id, d), ru: d.ru };
+        racks[to.rack].devices.push({ ...d, ru: to.ru });
+        slot.set(`${id}:${d.ru}`, to);
+      }
+      const zoneBy = (label) => (L.shift || []).find(s => (s.zones || []).includes(label))?.by ?? 0;
+      const zones = [
+        ...base.zones.filter(z => !(L.dropZones || []).includes(z.label)).map(z => {
+          const by = zoneBy(z.label);
+          return by ? { ...z, rackStart: 'A' + (+z.rackStart.slice(1) + by), rackEnd: 'A' + (+z.rackEnd.slice(1) + by) } : z;
+        }),
+        ...(L.addZones || []),
+      ];
+      const nodeSigns = (base.nodeSigns || []).map(ns => {
+        const to = slot.get(`${ns.rack}:${ns.ru + 1}`);
+        return to ? { ...ns, rack: to.rack, ru: to.ru - 1 } : ns;
+      });
+      // Sanity: every device inside its rack and no two overlapping (a bad entry shows up as a
+      // console error rather than gear drawn through gear).
+      for (const [id, rk] of Object.entries(racks)) {
+        const used = new Map();
+        for (const d of rk.devices) for (let u = d.ru; u < d.ru + d.h; u++) {
+          if (u < 1 || u > RACK_U) console.error(`layout ${L.name}: ${d.name} outside ${id} (U${u})`);
+          if (used.has(u)) console.error(`layout ${L.name}: ${d.name} overlaps ${used.get(u)} in ${id} U${u}`);
+          used.set(u, d.name);
+        }
+      }
+      return { ...base, racks, zones, nodeSigns, alignedZones: L.alignedZones };
+    }
+
     // Layouts 0–3 re-order sections; every layout takes its ring-node signs from options.mjs
     // (OPTIONS is in bar order), in place of the baked RLS name plates.
     const labDataFor = (i) => {
       const L = RACK_LAYOUTS[i];
+      if (L.base != null) return moveLabData(labDataFor(L.base), L);
       if (!L.blocks) return frontRowLabData(L);
       return { ...remapLabRacks(L), placards: [], nodeSigns: nodeSignsOf(FRONT_ROW_OPTIONS[i].plan) };
     };
     const layoutParam = parseInt(new URLSearchParams(location.search).get('layout'), 10);
-    let rackLayoutIdx = (layoutParam >= 0 && layoutParam < RACK_LAYOUTS.length) ? layoutParam : 0;
+    let rackLayoutIdx = Math.max(0, RACK_LAYOUTS.findIndex((L, i) => layoutId(i) === layoutParam));
 
     // A 19" equipment rack: 58U of mounting space (19" internal + ~1" frame each side
     // → ~21" external). Devices are placed by RU, RU 1 at the bottom, coloured by type.
@@ -842,9 +960,13 @@
     // headers. The whole canvas is filled (OPAQUE) so the sign renders into the glass
     // transmission pass and is visible through the glass from the conference room —
     // transparent overlays are skipped by that pass and would be invisible.
-    function makeBigLabel(text, wM, hM) {
+    // keepAspect: size the canvas to the sign's aspect (up to 4096 px wide) instead of 1024 px
+    // with a 128 px floor, which stretches the text on very wide, short signs (Option 9's
+    // 8-rack bands). Opt-in per zone so the existing layouts' signs render as before.
+    function makeBigLabel(text, wM, hM, { keepAspect = false } = {}) {
       const cv = document.createElement('canvas');
-      cv.width = 1024; cv.height = Math.max(128, Math.round(1024 * hM / wM));
+      if (keepAspect) { cv.width = Math.min(4096, Math.round(256 * wM / hM)); cv.height = Math.round(cv.width * hM / wM); }
+      else { cv.width = 1024; cv.height = Math.max(128, Math.round(1024 * hM / wM)); }
       const ctx = cv.getContext('2d'), W = cv.width, Hc = cv.height;
       ctx.fillStyle = '#1b2838'; ctx.fillRect(0, 0, W, Hc);        // solid dark-slate plate
       ctx.fillStyle = '#e4002b'; ctx.fillRect(0, Hc - Hc * 0.09, W, Hc * 0.09);  // Ciena-red base bar
@@ -1098,7 +1220,7 @@
       };
       // The 6500/ELS/RLS lower-section signs share ONE aligned band — the clear gap
       // common to their racks, capped by the tightest section (RLS, under the 8192s).
-      const ALIGNED = new Set(['6500', 'ELS', 'RLS', 'TDM']);
+      const ALIGNED = new Set(labData.alignedZones || ['6500', 'ELS', 'RLS', 'TDM']);
       const lowerZones = labData.alignLower === false ? [] : labData.zones.filter(z => ALIGNED.has(z.label));
       let alignedBand = null;
       if (lowerZones.length) {
@@ -1117,7 +1239,7 @@
         const hM = hRU * U_M;
         const xs = xOfOrder(orderOf(z.rackStart)), xe = xOfOrder(orderOf(z.rackEnd));
         const left = Math.min(xs, xe) - RACK_W / 2, right = Math.max(xs, xe) + RACK_W / 2;
-        const sign = makeBigLabel(z.label, right - left, hM);
+        const sign = makeBigLabel(z.label, right - left, hM, { keepAspect: !!z.keepAspect });
         sign.position.set((left + right) / 2, RACK_PLINTH + (bottom - 1) * U_M + hM / 2, signZ);
         g.add(sign);
       }
@@ -1701,7 +1823,7 @@
       updateLayoutBar();
       if (keepRing) setFiberRing(true); else if (keepSpot) setSpotlightMode(true);
       const url = new URL(location.href);
-      if (i) url.searchParams.set('layout', i); else url.searchParams.delete('layout');
+      if (i) url.searchParams.set('layout', layoutId(i)); else url.searchParams.delete('layout');
       history.replaceState(null, '', url);
     }
     // 2D layout bar: ‹ / › and the dots step through RACK_LAYOUTS; ← / → keys do the same.
@@ -1718,8 +1840,10 @@
       layoutBar.querySelector('.name').textContent = `${rackLayoutIdx + 1} / ${RACK_LAYOUTS.length} · ${L.name}`;
       layoutBar.querySelector('.desc').textContent = L.desc;
       layoutDots.forEach((d, i) => d.classList.toggle('on', i === rackLayoutIdx));
-      // Link this layout's elevation (OPTIONS is in bar order).
-      document.getElementById('docs-link').href = `front-row/#${FRONT_ROW_OPTIONS[rackLayoutIdx].key}`;
+      // Link this layout's elevation (OPTIONS is in bar order); Option 9 has none yet.
+      const docs = document.getElementById('docs-link'), opt = FRONT_ROW_OPTIONS[rackLayoutIdx];
+      docs.style.display = (opt && !L.base) ? '' : 'none';
+      if (opt) docs.href = `front-row/#${opt.key}`;
     }
     const stepLayout = (dir) =>
       setRackLayout((rackLayoutIdx + dir + RACK_LAYOUTS.length) % RACK_LAYOUTS.length);
@@ -1804,7 +1928,8 @@
     // Expose for debugging / tweaking from the console.
     window.EBC = { scene, camera, renderer, controls, CONFIG, mat, root, THREE,
                    nearWall, farWall, ipadGroup, setGlassFrosted, openOverlay,
-                   setRoomLightsOn, setDemoMode, setSpotlightMode, setFiberRing, setRackLayout };
+                   setRoomLightsOn, setDemoMode, setSpotlightMode, setFiberRing, setRackLayout,
+                   RACK_LAYOUTS, labDataFor };
   </script>
 </body>
 </html>
