@@ -75,8 +75,8 @@
   <div id="loader">Building the room…</div>
 
   <nav id="tabs" class="ui" aria-label="Network view">
-    <button data-view="ws6500" class="on">ws6500<small>6500 ring · racks A2–A4</small></button>
-    <button data-view="wsrls">wsrls<small>RLS ring · racks A5–A7</small></button>
+    <button data-view="wsrls" class="on">wsrls<small>RLS ring · racks A5–A7</small></button>
+    <button data-view="ws6500">ws6500<small>6500 ring · racks A2–A4</small></button>
   </nav>
   <a id="back-link" class="ui" href="./?layout=1">‹ Room (layout 1)</a>
 
@@ -99,6 +99,7 @@
        capture camera and the recorder.
        URL: ?capture  — fixed 1920×1080 canvas, no UI, frames rendered on demand
                         by MORPH.renderAt(seconds) (for offline video capture).
+            ?view=ws6500 | wsrls — the view to open on (default wsrls).
        ====================================================================== -->
   <script type="module">
     import * as THREE from 'three';
@@ -109,6 +110,8 @@
 
     const params = new URLSearchParams(location.search);
     const CAPTURE = params.has('capture');
+    const VIEW0 = params.get('view') === 'ws6500' ? 'ws6500' : 'wsrls'; // the default view is the RLS ring
+    const S0 = VIEW0 === 'wsrls' ? 1 : 0; // the engine's s: 0 = ws6500, 1 = wsrls
     if (CAPTURE) document.body.classList.add('capture');
     const REC_W = 1920, REC_H = 1080;
 
@@ -199,17 +202,18 @@
       const p = shot.pos.clone().sub(shot.at).applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(deg));
       return { pos: p.add(shot.at), at: shot.at, fov: shot.fov };
     };
-    // The scripted sequence: [seconds, t, s, shot]. Values ease between keys.
+    // The scripted sequence: [seconds, t, s, shot]. Values ease between keys. It opens on the
+    // default view (wsrls, s = 1), swaps to the other ring, and goes back into the room.
     const SEQ = [
-      [0, 0, 0, SEAT],
-      [3, 0, 0, SEAT],
-      [7, 0.15, 0, PUSH], // spotlight
-      [25, 1, 0, VANTAGE], // room fades, devices fly, the network grows
-      [31, 1, 0, orbit(VANTAGE, 16)],
-      [39, 1, 1, orbit(VANTAGE, -12)], // tab swap: ws6500 → wsrls
-      [45, 1, 1, VANTAGE],
-      [58, 0, 1, SEAT], // and back into the room
-      [62, 0, 1, SEAT],
+      [0, 0, 1, SEAT],
+      [3, 0, 1, SEAT],
+      [7, 0.15, 1, PUSH], // spotlight
+      [25, 1, 1, VANTAGE], // room fades, devices fly, the network grows
+      [31, 1, 1, orbit(VANTAGE, 16)],
+      [39, 1, 0, orbit(VANTAGE, -12)], // tab swap: wsrls → ws6500
+      [45, 1, 0, VANTAGE],
+      [58, 0, 0, SEAT], // and back into the room
+      [62, 0, 0, SEAT],
     ];
     const SEQ_LEN = SEQ[SEQ.length - 1][0];
     const ease = (k) => k * k * (3 - 2 * k);
@@ -231,7 +235,7 @@
     }
 
     // ---- State ----
-    const state = { t: 0, s: 0, sTarget: 0, playDir: 0, cam: 'orbit', seqStart: null, seqSec: 0 };
+    const state = { t: 0, s: S0, sTarget: S0, playDir: 0, cam: 'orbit', seqStart: null, seqSec: 0 };
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.dampingFactor = 0.08;
     controls.maxPolarAngle = Math.PI * 0.495;
@@ -241,6 +245,7 @@
     const playBtn = document.getElementById('play'), camBtn = document.getElementById('cam');
     const seqBtn = document.getElementById('seq'), recBtn = document.getElementById('rec');
     const tabs = [...document.querySelectorAll('#tabs button')];
+    tabs.forEach((b) => b.classList.toggle('on', b.dataset.view === VIEW0));
 
     function setView(view) {
       state.sTarget = view === 'wsrls' ? 1 : 0;
@@ -269,7 +274,7 @@
     }
 
     // ---- One frame ----
-    let lastS = 0, swapDir = 'rls';
+    let lastS = S0, swapDir = S0 ? '6500' : 'rls';
     let stillMode = false; // MORPH.still(): in capture mode too, draw the given t / s, not the sequence
     function frame(time, dt) {
       let shot = null;
@@ -367,8 +372,8 @@
       else if (e.key === 'Home') { stopSequence(); setT(0); }
       else if (e.key === 'End') { stopSequence(); setT(1); }
       else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
-      else if (e.key === '1') { stopSequence(); setView('ws6500'); }
-      else if (e.key === '2') { stopSequence(); setView('wsrls'); }
+      else if (e.key === '1') { stopSequence(); setView('wsrls'); } // the tabs' order
+      else if (e.key === '2') { stopSequence(); setView('ws6500'); }
       else if (e.key === 'c' || e.key === 'C') setCam(state.cam === 'orbit' ? 'path' : 'orbit');
       else if (e.key === 'p' || e.key === 'P') state.seqStart === null ? startSequence() : stopSequence();
       else return;

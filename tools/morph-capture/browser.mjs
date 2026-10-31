@@ -2,7 +2,7 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { execSync } from 'node:child_process';
-export async function openMorph(url, { capture = true, width = 1920, height = 1080 } = {}) {
+export async function openMorph(url, { capture = true, width = 1920, height = 1080, raw = false } = {}) {
   const server = await chromium.launchServer({ headless: true,
     args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--enable-precise-memory-info'] });
   const top = server.process().pid;
@@ -11,7 +11,7 @@ export async function openMorph(url, { capture = true, width = 1920, height = 10
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.goto(`${url}/morph.html${capture ? '?capture' : ''}`, { waitUntil: 'networkidle' });
+  await page.goto(raw ? url : `${url}/morph.html${capture ? '?capture' : ''}`, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.MORPH, null, { timeout: 90000 });
   const rss = () => { // anon RSS and total RSS (MB) over the chrome process tree, threads excluded
     const pids = execSync(`pstree -pT ${top} | grep -o '([0-9]*)' | tr -d '()'`, { encoding: 'utf8' }).trim().split('\n');

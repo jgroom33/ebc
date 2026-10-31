@@ -35,3 +35,5 @@ should stay constant until the scripted orbit at 25 s.
 `travel-probe.mjs <root>` prints, per CAL node and view, the rack slot it flies from, the node it
 lands on and the dx / dy / dz between them (optical nodes should be a near-vertical drop).
 `scrubframes.mjs <root> <outdir> <view> <t>...` saves stills of one view at given t values.
+`default-check.mjs <root> <outdir>` opens morph.html with the UI (plain and `?view=ws6500`) and
+reports the view it starts on, the highlighted tab and the sequence's start / end view.
