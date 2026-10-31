@@ -714,7 +714,36 @@
       // sign at its own rack and U. Its OPTIONS list all 7 entries in bar order (the 4 above
       // are its SECTION_LAYOUTS, which tools/front-row/check.mjs keeps equal to these).
       ...FRONT_ROW_OPTIONS.filter(o => !o.blocks),
+      // Option 9 (?layout=9; `id` keeps the URL number apart from its place on the bar): starts
+      // from `base` (Option 1) and re-places devices on top of it. Bottom of the racks photonic,
+      // the layer above it transport, packet on top as in Option 1. See moveLabData for the keys.
+      { id: 9, base: 1, name: 'Option 9 · Photonic on the bottom',
+        desc: '6500 · RLS-300 + Services · RLS · ELS',
+        // Lower (photonic) sections only — devices topping out below U30; packet stays put.
+        shift: [
+          { racks: ['A2', 'A3', 'A4'], by: -1, belowRU: 30, zones: ['6500'] },            // 6500 → A1–A3
+          { racks: ['A5', 'A6', 'A7', 'A8', 'A9'], by: 1, belowRU: 30, zones: ['RLS', 'ELS'] }, // RLS → A6–A8, ELS → A9–A10
+        ],
+        moves: [
+          // TDM leaves the front row: an empty back-row rack, same U as in A1.
+          { name: '3926-TDM-2', rack: 'B4', ru: 19 }, { name: '3926-TDM-1', rack: 'B4', ru: 20 },
+          { name: '3926-Combo-2', rack: 'B4', ru: 21 }, { name: '3926-Combo-1', rack: 'B4', ru: 22 },
+          // RLS-300 pair, photonic, at the bottom: Uptown in A5, Downtown in A6 (node sign at U1).
+          { name: 'Uptown-FMT', rack: 'A5', ru: 2 }, { name: 'Uptown', rack: 'A5', ru: 3 },
+          { name: 'Downtown-FMT', rack: 'A6', ru: 2 }, { name: 'Downtown', rack: 'A6', ru: 3 },
+          // 6500-D7 services shelves, transport, above the photonic layer. Both in A5: A6 has no
+          // 8U left under its packet gear once Americas, Pacific and Downtown are in it.
+          { name: '6500-D7-2-FMT', rack: 'A5', ru: 8 }, { name: '6500-D7-2', rack: 'A5', ru: 9 },
+          { name: '6500-D7-1-FMT', rack: 'A5', ru: 16 }, { name: '6500-D7-1', rack: 'A5', ru: 17 },
+        ],
+        dropZones: ['TDM', 'DCOM', 'Outdoor'],
+        addZones: [
+          { rackStart: 'A5', rackEnd: 'A6', label: 'RLS-300', ru: 5, h: 3 },
+          { rackStart: 'A5', rackEnd: 'A5', label: '6500 Services', ru: 24, h: 3 },
+        ] },
     ];
+    // ?layout=N picks the entry whose `id` is N (an entry's id defaults to its bar position).
+    const layoutId = (i) => RACK_LAYOUTS[i].id ?? i;
     // A copy of LAB_RACKS with the front row re-ordered per `layout` (old order → new order).
     function remapLabRacks(layout) {
       const newOf = new Map();
@@ -779,15 +808,62 @@
       // section-reorder layouts; here each zone sign sits in its own clear gap.
       return { racks, zones, fibers: LAB_RACKS.fibers, rings: LAB_RACKS.rings, placards: [], nodeSigns, alignLower: false };
     }
+    // A layout with `base` (Option 9) is that layout's lab data with devices re-placed:
+    //   shift:  [{ racks, by, belowRU, zones }] — every device in `racks` whose top U is under
+    //           belowRU moves `by` racks (all rules read the base, so chains don't cascade), and
+    //           the named zones move with it;
+    //   moves:  [{ name, rack, ru }] — one device to any rack (front or back) and U; wins over shift;
+    //   dropZones / addZones — zone signs removed / added.
+    // A ring-node sign follows the device just above it (its node's bottom part). Fibers and
+    // rings are keyed by device name, so they follow on their own.
+    function moveLabData(base, L) {
+      const moveOf = new Map((L.moves || []).map(m => [m.name, m]));
+      const shiftRack = (id, d) => {
+        const s = (L.shift || []).find(s => s.racks.includes(id) && d.ru + d.h - 1 < s.belowRU);
+        return s ? 'A' + (+id.slice(1) + s.by) : id;
+      };
+      const racks = {}, slot = new Map();          // slot: 'rack:U' in base -> new { rack, ru }
+      for (const [id, rk] of Object.entries(base.racks)) racks[id] = { ...rk, devices: [] };
+      for (const [id, rk] of Object.entries(base.racks)) for (const d of rk.devices) {
+        const m = moveOf.get(d.name), to = m ? { rack: m.rack, ru: m.ru } : { rack: shiftRack(id, d), ru: d.ru };
+        racks[to.rack].devices.push({ ...d, ru: to.ru });
+        slot.set(`${id}:${d.ru}`, to);
+      }
+      const zoneBy = (label) => (L.shift || []).find(s => (s.zones || []).includes(label))?.by ?? 0;
+      const zones = [
+        ...base.zones.filter(z => !(L.dropZones || []).includes(z.label)).map(z => {
+          const by = zoneBy(z.label);
+          return by ? { ...z, rackStart: 'A' + (+z.rackStart.slice(1) + by), rackEnd: 'A' + (+z.rackEnd.slice(1) + by) } : z;
+        }),
+        ...(L.addZones || []),
+      ];
+      const nodeSigns = (base.nodeSigns || []).map(ns => {
+        const to = slot.get(`${ns.rack}:${ns.ru + 1}`);
+        return to ? { ...ns, rack: to.rack, ru: to.ru - 1 } : ns;
+      });
+      // Sanity: every device inside its rack and no two overlapping (a bad entry shows up as a
+      // console error rather than gear drawn through gear).
+      for (const [id, rk] of Object.entries(racks)) {
+        const used = new Map();
+        for (const d of rk.devices) for (let u = d.ru; u < d.ru + d.h; u++) {
+          if (u < 1 || u > RACK_U) console.error(`layout ${L.name}: ${d.name} outside ${id} (U${u})`);
+          if (used.has(u)) console.error(`layout ${L.name}: ${d.name} overlaps ${used.get(u)} in ${id} U${u}`);
+          used.set(u, d.name);
+        }
+      }
+      return { ...base, racks, zones, nodeSigns };
+    }
+
     // Layouts 0–3 re-order sections; every layout takes its ring-node signs from options.mjs
     // (OPTIONS is in bar order), in place of the baked RLS name plates.
     const labDataFor = (i) => {
       const L = RACK_LAYOUTS[i];
+      if (L.base != null) return moveLabData(labDataFor(L.base), L);
       if (!L.blocks) return frontRowLabData(L);
       return { ...remapLabRacks(L), placards: [], nodeSigns: nodeSignsOf(FRONT_ROW_OPTIONS[i].plan) };
     };
     const layoutParam = parseInt(new URLSearchParams(location.search).get('layout'), 10);
-    let rackLayoutIdx = (layoutParam >= 0 && layoutParam < RACK_LAYOUTS.length) ? layoutParam : 0;
+    let rackLayoutIdx = Math.max(0, RACK_LAYOUTS.findIndex((L, i) => layoutId(i) === layoutParam));
 
     // A 19" equipment rack: 58U of mounting space (19" internal + ~1" frame each side
     // → ~21" external). Devices are placed by RU, RU 1 at the bottom, coloured by type.
@@ -1701,7 +1777,7 @@
       updateLayoutBar();
       if (keepRing) setFiberRing(true); else if (keepSpot) setSpotlightMode(true);
       const url = new URL(location.href);
-      if (i) url.searchParams.set('layout', i); else url.searchParams.delete('layout');
+      if (i) url.searchParams.set('layout', layoutId(i)); else url.searchParams.delete('layout');
       history.replaceState(null, '', url);
     }
     // 2D layout bar: ‹ / › and the dots step through RACK_LAYOUTS; ← / → keys do the same.
@@ -1718,8 +1794,10 @@
       layoutBar.querySelector('.name').textContent = `${rackLayoutIdx + 1} / ${RACK_LAYOUTS.length} · ${L.name}`;
       layoutBar.querySelector('.desc').textContent = L.desc;
       layoutDots.forEach((d, i) => d.classList.toggle('on', i === rackLayoutIdx));
-      // Link this layout's elevation (OPTIONS is in bar order).
-      document.getElementById('docs-link').href = `front-row/#${FRONT_ROW_OPTIONS[rackLayoutIdx].key}`;
+      // Link this layout's elevation (OPTIONS is in bar order); Option 9 has none yet.
+      const docs = document.getElementById('docs-link'), opt = FRONT_ROW_OPTIONS[rackLayoutIdx];
+      docs.style.display = (opt && !L.base) ? '' : 'none';
+      if (opt) docs.href = `front-row/#${opt.key}`;
     }
     const stepLayout = (dir) =>
       setRackLayout((rackLayoutIdx + dir + RACK_LAYOUTS.length) % RACK_LAYOUTS.length);
@@ -1804,7 +1882,8 @@
     // Expose for debugging / tweaking from the console.
     window.EBC = { scene, camera, renderer, controls, CONFIG, mat, root, THREE,
                    nearWall, farWall, ipadGroup, setGlassFrosted, openOverlay,
-                   setRoomLightsOn, setDemoMode, setSpotlightMode, setFiberRing, setRackLayout };
+                   setRoomLightsOn, setDemoMode, setSpotlightMode, setFiberRing, setRackLayout,
+                   RACK_LAYOUTS, labDataFor };
   </script>
 </body>
 </html>
