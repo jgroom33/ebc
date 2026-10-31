@@ -426,7 +426,7 @@ export function createMorph(model, { log = console } = {}) {
     const label = textSprite(n.name, hM, { accent: n.layer === 'tr' ? '#9aa0ad' : '#dc0000' });
     label.material.depthTest = false; label.renderOrder = 10; // never hidden behind another node
     net.add(label);
-    nodes[n.id] = { n, ...nm, base, cur: base.clone(), label, c: 0, sys: sysOf(n.id) };
+    nodes[n.id] = { n, ...nm, base, cur: base.clone(), label, c: 0, sys: sysOf(n.id), level: layerY(n.layer) };
     if (n.layer === 'ph') (centroidX[n.sys] ||= []).push(base.x);
   }
   for (const k of Object.keys(centroidX)) centroidX[k] = centroidX[k].reduce((a, b) => a + b, 0) / centroidX[k].length;
@@ -481,7 +481,7 @@ export function createMorph(model, { log = console } = {}) {
     if (LAYERS[k].place === 'above') { cap.center.set(0.5, 0); cap.position.set(g.position.x, g.position.y + 0.3, z0); }
     else { cap.center.set(1, 0); cap.position.set(x0 - 0.08, g.position.y + 0.02, z1); }
     net.add(cap);
-    slabs[k] = { g, mats: [mat, eMat], cap };
+    slabs[k] = { g, mats: [mat, eMat], cap, level: layerY(k), capDy: cap.position.y - g.position.y };
   }
 
   // ---- Links ----
@@ -627,7 +627,17 @@ export function createMorph(model, { log = console } = {}) {
   const ph = PHASES;
   const vec = new THREE.Vector3();
   const hl = (sys, focus) => (sys.length ? 0.1 + 0.9 * Math.max(...sys.map((k) => focus[k] ?? 1)) : 1);
-  function update({ t = 0, focus = ALL, time = 0 } = {}) {
+  // spread: how far apart the three layers stand (1 = the CAL spacing). A portrait phone raises it so the
+  // stack uses the screen's height; nodes, slabs and captions move up with their layer, links follow.
+  let spreadNow = 1;
+  function setSpread(spread) {
+    if (spread === spreadNow) return;
+    spreadNow = spread;
+    for (const nd of Object.values(nodes)) nd.base.y = DIORAMA.y + nd.level * S * spread;
+    for (const sl of Object.values(slabs)) { sl.g.position.y = DIORAMA.y + sl.level * S * spread - 0.03; sl.cap.position.y = sl.g.position.y + sl.capDy; }
+  }
+  function update({ t = 0, focus = ALL, time = 0, spread = 1 } = {}) {
+    setSpread(spread);
     const spot = smooth(...ph.spot, t);
     const shellA = 1 - smooth(...ph.shell, t), racksA = 1 - smooth(...ph.racks, t);
     const ghostA = smooth(...ph.ghost, t) * (1 - smooth(...ph.ghostOut, t));
@@ -697,7 +707,18 @@ export function createMorph(model, { log = console } = {}) {
   update({ t: 0 });
 
   return {
-    group: root, lights, update, flyers, nodes,
+    group: root, lights, update, setSpread, flyers, nodes, layerHeight: (k, spread = 1) => DIORAMA.y + layerY(k) * S * spread,
+    // where the network is drawn (its slabs' corners and the captions' far corners), for fitting the camera
+    networkPoints() {
+      const pts = [];
+      for (const sl of Object.values(slabs)) {
+        const geo = sl.g.children[0].geometry.parameters, { x, y, z } = sl.g.position;
+        for (const dx of [-1, 1]) for (const dz of [-1, 1]) pts.push(new THREE.Vector3(x + dx * geo.width / 2, y, z + dz * geo.depth / 2));
+        const c = sl.cap, w = c.scale.x, h = c.scale.y; // a sprite: its centre (anchor) and size
+        for (const fx of [0, 1]) for (const fy of [0, 1]) pts.push(new THREE.Vector3(c.position.x + (fx - c.center.x) * w, c.position.y + (fy - c.center.y) * h, c.position.z));
+      }
+      return pts;
+    },
     diorama: DIORAMA.clone(), rackFace: FRONT_Z + RACK_D / 2,
     rackX: (id) => xOfOrder(+id.slice(1)),
   };

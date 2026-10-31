@@ -52,3 +52,7 @@ portrait and landscape: navs hidden, snapshots at t = 0, mid-morph, t = 1 and th
 pause / resume, a live rotation, and (with --loop) Chrome RSS over one loop. `browser.mjs` takes a
 `device` option (deviceScaleFactor, isMobile, hasTouch); `MORPH.snapAt(sec)` returns one frame of the
 sequence as a PNG data URL outside capture mode.
+
+`portrait-measure.mjs <root> <outdir> [sec ...]` snapshots both phones in portrait without the HUD and
+reports how much of the height (and width) the network fills; P_SPREAD / P_PITCH / P_FOV env vars try other
+portrait settings.

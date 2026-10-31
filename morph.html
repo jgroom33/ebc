@@ -140,11 +140,15 @@
 
     let fixedSize = CAPTURE; // recording / capture: a fixed 1920×1080 drawing buffer, scaled to fit
     // Phone layout: a touch screen whose short side is a phone's, or any window this narrow.
-    let MOBILE = false;
+    let MOBILE = false, PORTRAIT = false;
+    // A portrait phone fills its height better with the layers further apart and a steeper look down.
+    // spread: layer spacing (1 = CAL); pitch: extra degrees down on the network shots. Both blend in as the
+    // network forms (t), so the room shot and the drops stay as they are; yaw never changes.
+    const PORTRAIT_FIT = { spread: 10, pitch: 15, fov: 22 };
     const isMobile = (w, h) => !CAPTURE && ((matchMedia('(pointer: coarse)').matches && Math.min(w, h) <= 600) || w <= 600);
     function fit() {
       const w = innerWidth, h = innerHeight;
-      MOBILE = isMobile(w, h);
+      MOBILE = isMobile(w, h); PORTRAIT = MOBILE && h > w;
       document.body.classList.toggle('mobile', MOBILE);
       if (fixedSize) {
         renderer.setPixelRatio(1);
@@ -322,7 +326,7 @@
     }
 
     // ---- State ----
-    const state = { t: 0, focus: focusVec(FOCUS0), focusKey: FOCUS0, playDir: 0, cam: 'path', seqStart: null, seqSec: 0, looping: false, pausedSec: 0 };
+    const state = { t: 0, focus: focusVec(FOCUS0), focusKey: FOCUS0, playDir: 0, cam: 'path', seqStart: null, seqSec: 0, looping: false, pausedSec: 0, spread: 1 };
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.dampingFactor = 0.08;
     controls.maxPolarAngle = Math.PI * 0.495;
@@ -371,6 +375,7 @@
     // ---- One frame ----
     let stillMode = false; // MORPH.still(): in capture mode too, draw the given t / focus, not the sequence
     let renderSeqOnce = false; // MORPH.renderAt() outside capture mode: draw one frame of the sequence
+    let noHud = false; // MORPH.snapAt(sec, { hud: false }): the scene alone, to measure it
     // The scripted shots are framed for 16:9. On a narrower screen (a phone, portrait or not), keep
     // that horizontal view: widen the field of view up to 70°, then dolly straight back along the line
     // of sight for the rest. Same direction (yaw, pitch), so nothing crops at the orbit's ends.
@@ -382,9 +387,39 @@
       }
       if (a >= FRAME_ASPECT - 1e-3) return shot;
       const tanH = Math.tan(rad(shot.fov / 2)) * FRAME_ASPECT; // the 16:9 shot's horizontal half-angle
-      const fov = Math.min(Math.max(shot.fov, FIT_FOV_MAX), 2 * deg(Math.atan(tanH / a)));
+      let fov = Math.min(Math.max(shot.fov, FIT_FOV_MAX), 2 * deg(Math.atan(tanH / a)));
+      // portrait network shots go telephoto (from far back, near orthographic) so the three layers keep one size
+      if (PORTRAIT && shot.w) fov += (PORTRAIT_FIT.fov - fov) * shot.w;
       const k = tanH / (Math.tan(rad(fov / 2)) * a);
-      return { pos: shot.pos.clone().sub(shot.at).multiplyScalar(k).add(shot.at), at: shot.at, fov };
+      return { pos: shot.pos.clone().sub(shot.at).multiplyScalar(k).add(shot.at), at: shot.at, fov, w: shot.w };
+    }
+    const smooth01 = (a, b, x) => { const k = Math.min(1, Math.max(0, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
+    const _tmpCam = new THREE.PerspectiveCamera(), _p = new THREE.Vector3();
+    // Portrait: raise the aim with the taller stack and look down more steeply, by how far the network has formed.
+    function portraitShot(shot, t, spread) {
+      const w = smooth01(0.3, 0.85, t);
+      if (!PORTRAIT || w <= 0) return shot;
+      const at = shot.at.clone(); at.y += (morph.layerHeight('ip', spread) - morph.layerHeight('ip', 1)) * 0.5 * w;
+      const d = shot.pos.clone().sub(shot.at), r = d.length(), hz = Math.hypot(d.x, d.z);
+      const elev = Math.min(Math.atan2(d.y, hz) + rad(PORTRAIT_FIT.pitch) * w, rad(80));
+      const pos = new THREE.Vector3(d.x / hz * Math.cos(elev) * r, Math.sin(elev) * r, d.z / hz * Math.cos(elev) * r).add(at);
+      return { pos, at, fov: shot.fov, w };
+    }
+    // ... and keep the whole stack (slab corners, captions) between the legend and the caption strip.
+    function portraitFitHeight(shot) {
+      if (!PORTRAIT || !shot.w) return shot;
+      const pts = morph.networkPoints(), top = 0.8, bottom = -0.72;
+      let k = 1;
+      for (let i = 0; i < 24; i++) {
+        _tmpCam.fov = shot.fov; _tmpCam.aspect = camera.aspect; _tmpCam.near = 0.05; _tmpCam.far = 200; _tmpCam.updateProjectionMatrix();
+        _tmpCam.position.copy(shot.pos).sub(shot.at).multiplyScalar(k).add(shot.at); _tmpCam.lookAt(shot.at); _tmpCam.updateMatrixWorld();
+        let ok = true;
+        for (const q of pts) { _p.copy(q).project(_tmpCam); if (_p.y > top || _p.y < bottom || Math.abs(_p.x) > 0.9) { ok = false; break; } }
+        if (ok) break;
+        k *= 1.05;
+      }
+      k = 1 + (k - 1) * shot.w;
+      return { pos: shot.pos.clone().sub(shot.at).multiplyScalar(k).add(shot.at), at: shot.at, fov: shot.fov };
     }
     function frame(time, dt) {
       let shot = null;
@@ -401,13 +436,19 @@
         for (const k of SYSTEM_KEYS) { const d = target[k] - state.focus[k]; state.focus[k] += Math.sign(d) * Math.min(Math.abs(d), dt / 0.6); }
         if (state.cam === 'path') shot = shotForT(state.t);
       }
+      // the layer spread eases toward its target (a portrait phone's, or 1), so a rotation doesn't jump
+      const spreadTarget = PORTRAIT ? PORTRAIT_FIT.spread : 1;
+      state.spread = renderSeqOnce || dt === 0 ? spreadTarget : state.spread + Math.sign(spreadTarget - state.spread) * Math.min(Math.abs(spreadTarget - state.spread), dt * 3);
+      // the stack stretches as its layers form (transport, then IP), so the camera backs off only as needed
+      const spread = 1 + (state.spread - 1) * smooth01(0.42, 0.8, state.t);
+      morph.setSpread(spread); // before fitting the camera to where the layers now stand
       if (shot) {
-        shot = fitWidth(shot);
+        shot = portraitFitHeight(fitWidth(portraitShot(shot, state.t, spread)));
         camera.position.copy(shot.pos); camera.lookAt(shot.at); controls.target.copy(shot.at);
         if (camera.fov !== shot.fov) { camera.fov = shot.fov; camera.updateProjectionMatrix(); }
       }
       else controls.update();
-      morph.update({ t: state.t, focus: state.focus, time });
+      morph.update({ t: state.t, focus: state.focus, time, spread });
       hud.draw(viewTitle(state.focus), caption(state), state.t > 0.84, MOBILE && !CAPTURE && state.seqStart === null && !renderSeqOnce);
       if (!CAPTURE) {
         tInput.value = state.t; tOut.textContent = `t ${state.t.toFixed(2)}`;
@@ -415,7 +456,7 @@
         tabs.forEach((b) => b.classList.toggle('on', b.dataset.focus === one));
       }
       renderer.render(scene, camera);
-      hud.render();
+      if (!noHud) hud.render();
     }
 
     // ---- Sequence + recording ----
@@ -534,8 +575,12 @@
       // Render one frame of the scripted sequence at `sec` (capture mode), deterministic.
       renderAt(sec) { stillMode = false; state.seqSec = sec; renderSeqOnce = true; frame(sec, 0); renderSeqOnce = false; },
       // renderAt() and return the canvas as a PNG data URL (read in the same task, so the frame is intact).
-      snapAt(sec) { this.renderAt(sec); return renderer.domElement.toDataURL('image/png'); },
+      snapAt(sec, { hud: withHud = true } = {}) {
+        noHud = !withHud; this.renderAt(sec); noHud = false;
+        return renderer.domElement.toDataURL('image/png');
+      },
       isMobile: () => MOBILE,
+      PORTRAIT_FIT, // tunable from the console: spread, pitch
       // Render a still at a given t and focus ('all', '6500', 'rls', 'els'; sequence stopped).
       still({ t, focus = 'all', cam = 'path' }) {
         stopSequence(); state.playDir = 0; setCam(cam); stillMode = true;

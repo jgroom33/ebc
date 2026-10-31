@@ -151,6 +151,11 @@ and what rides on it forward.
   off along its line of sight), so the room and the whole diorama with its captions fit the width at
   every moment of the loop. The story caption wraps under the scene (one line on a phone on its side,
   with the view lifted above it); the legend sits small, top left. A tap pauses / resumes the loop.
+  **Portrait** fills the height too: as the network forms the three layers spread up to ten times
+  further apart (drops and links stretch with them, still vertical) and the camera looks down 15°
+  more steeply through a 22° telephoto view from further back (the layers keep one size), still at
+  the same azimuth and fitting the width; at t = 1 the network fills about two thirds of the height.
+  The room shot at t = 0 is unchanged. `MORPH.PORTRAIT_FIT` (spread, pitch, fov) tunes it.
 - One value `t` (0 = room, 1 = network) drives the whole morph and is evaluated every frame, so it
   scrubs and reverses: slider, ← / → (shift for bigger steps), Home / End, space to play.
   1–4 set the focus (All / 6500 / RLS / ELS, the tabs' order).
